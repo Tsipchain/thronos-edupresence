@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="el">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Επιβεβαίωση παρουσίας</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="mobile">
+  <main class="mobile-card">
+    <h1>Thronos EduPresence</h1>
+    {% if closed %}
+      <p class="danger-text">Το μάθημα έχει κλείσει. Δεν μπορεί να γίνει νέα επιβεβαίωση.</p>
+    {% else %}
+      <p>Μαθητής: <strong>{{ attendance.student.full_name }}</strong></p>
+      <p>Μάθημα: <strong>{{ attendance.lesson.classroom.name }}</strong></p>
+      <p>Ημερομηνία: {{ attendance.lesson.starts_at.strftime('%d/%m/%Y %H:%M') }}</p>
+      <p class="success">Η επιβεβαίωσή σου καταγράφηκε. Δείξε το QR στον εκπαιδευτή για τελική παρουσία.</p>
+      <img id="qr" class="qr" src="/s/{{ token }}/qr.png?ts={{ now.timestamp()|int }}" alt="QR παρουσίας">
+      <p class="muted">Το QR ανανεώνεται αυτόματα. Μην το στέλνεις σε άλλον.</p>
+      <script>
+        setInterval(() => {
+          document.getElementById('qr').src = '/s/{{ token }}/qr.png?ts=' + Date.now();
+        }, 45000);
+      </script>
+    {% endif %}
+  </main>
+</body>
+</html>

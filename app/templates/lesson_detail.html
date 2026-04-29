@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block breadcrumbs %}<span>›</span><a href="/nodes/{{ lesson.classroom.node_id }}">{{ lesson.classroom.node.name if lesson.classroom.node else 'Κόμβος' }}</a><span>›</span><a href="/classes/{{ lesson.classroom_id }}">Τμήμα {{ lesson.classroom.name }}</a><span>›</span><span>Παρουσίες</span>{% endblock %}
+{% block content %}
+<a class="back-link no-print" href="/classes/{{ lesson.classroom_id }}">← Πίσω στο τμήμα</a>
+<section class="plain-head">
+  <h1>Παρουσίες - {{ lesson.classroom.name }}</h1>
+  <p class="muted">{{ lesson.starts_at.strftime('%d/%m/%Y %H:%M') }} · {{ lesson.duration_minutes }} λεπτά · {{ status_label(lesson.status) }}</p>
+</section>
+
+{% if lesson.status == 'open' %}
+<section class="block accent-block no-print">
+  <h2>Άμεση επιβεβαίωση παρουσίας</h2>
+  <p>Ο μαθητής ανοίγει το προσωπικό link, εμφανίζει QR και ο εκπαιδευτής το σκανάρει. Για όσους δεν έχουν κινητό, ο εκπαιδευτής καταχωρεί χειροκίνητα με αιτιολογία.</p>
+  <div class="sms-panel">
+    <form method="post" action="/lessons/{{ lesson.id }}/send-sms" onsubmit="return confirm('Να σταλούν SMS links στους μαθητές που έχουν κινητό;');">
+      <button class="btn primary">Αποστολή SMS links σε όλους</button>
+      <span class="muted">Provider: {{ settings.sms_provider }}{% if settings.sms_provider == 'mock' %} — δοκιμαστικό outbox, δεν χρεώνει SMS{% endif %}</span>
+    </form>
+    {% if request.query_params.get('sms_sent') %}
+      <p class="success">SMS: {{ request.query_params.get('sms_sent') }} στάλθηκαν, {{ request.query_params.get('sms_failed') }} απέτυχαν, {{ request.query_params.get('sms_skipped') }} χωρίς κινητό.</p>
+    {% endif %}
+  </div>
+  <div class="scanner-actions">
+    <button class="btn primary" onclick="startScanner({{ lesson.id }})">Άνοιγμα κάμερας / Scanner</button>
+    <button class="btn" onclick="stopScanner()">Κλείσιμο κάμερας</button>
+  </div>
+  <div id="reader" class="scanner"></div>
+  <form onsubmit="manualScan(event, {{ lesson.id }})" class="inline-form">
+    <input id="scan-token" placeholder="ή επικόλληση scan token">
+    <button class="btn">Scan token</button>
+  </form>
+  <pre id="scan-result"></pre>
+</section>
+{% endif %}
+
+<section class="block">
+  <div class="section-bar">
+    <h2>Παρουσιολόγιο ημέρας</h2>
+    {% if lesson.status == 'open' %}
+    <form method="post" action="/lessons/{{ lesson.id }}/close" onsubmit="return confirm('Κλείδωμα μαθήματος; Τα κενά θα γίνουν απουσίες και θα γραφτεί hash attestation.');">
+      <button class="btn danger">Κλείδωμα & εκτύπωση</button>
+    </form>
+    {% else %}
+      <a class="btn primary" href="/lessons/{{ lesson.id }}/print">Εκτύπωση</a>
+    {% endif %}
+  </div>
+
+  {% if lesson.status == 'open' %}
+  <details class="no-print link-list-box">
+    <summary>Links μαθητών για δοκιμή χωρίς SMS</summary>
+    <textarea readonly onclick="this.select()">{% for row in rows %}{{ row.student.full_name }}: {{ links[row.id] }}
+{% endfor %}</textarea>
+  </details>
+  {% endif %}
+
+  <table class="gov-table">
+    <thead><tr><th>#</th><th>Ονοματεπώνυμο</th><th>Παρουσία</th><th>Μέθοδος</th><th>Link / QR μαθητή</th><th>Ενέργειες</th></tr></thead>
+    <tbody>
+    {% for row in rows %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ row.student.full_name }}</td>
+        <td><span class="badge {{ row.status }}">{{ status_label(row.status) }}</span></td>
+        <td>{{ method_label(row.confirmation_method) }}</td>
+        <td>
+          {% if lesson.status == 'open' %}
+          <input class="copy" value="{{ links[row.id] }}" onclick="this.select();document.execCommand('copy');">
+          {% else %}-{% endif %}
+        </td>
+        <td>
+          {% if lesson.status == 'open' %}
+            <details>
+              <summary>Χειροκίνητα</summary>
+              <form method="post" action="/lessons/{{ lesson.id }}/attendance/{{ row.id }}/manual" class="stack small">
+                <select name="status">
+                  <option value="present">Παρών</option>
+                  <option value="absent">Απών</option>
+                  <option value="late">Καθυστέρηση</option>
+                  <option value="left_early">Έφυγε νωρίς</option>
+                </select>
+                <select name="reason">
+                  <option value="student_no_phone">Δεν έχει κινητό</option>
+                  <option value="technical_issue">Τεχνικό πρόβλημα</option>
+                  <option value="teacher_observed">Ο εκπαιδευτής τον είδε παρόντα</option>
+                  <option value="other">Άλλο</option>
+                </select>
+                <input name="notes" placeholder="Σημείωση">
+                <button class="btn">Αποθήκευση</button>
+              </form>
+            </details>
+          {% else %}
+            {% if row.status in ['absent','student_only_unverified'] and not row.makeup %}
+              <form method="post" action="/attendance/{{ row.id }}/makeup"><button class="btn">Αναπλήρωση</button></form>
+            {% elif row.makeup %}
+              <a class="btn" href="/makeups/{{ row.makeup.id }}">Αναπλήρωση #{{ row.makeup.id }}</a>
+            {% else %}<span class="muted">—</span>{% endif %}
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% if sms_messages %}
+<section class="block no-print">
+  <h2>SMS outbox / αποστολές</h2>
+  <table class="gov-table slim">
+    <thead><tr><th>Ώρα</th><th>Τηλέφωνο</th><th>Status</th><th>Μήνυμα</th></tr></thead>
+    <tbody>
+      {% for msg in sms_messages %}
+      <tr>
+        <td>{{ msg.created_at.strftime('%d/%m %H:%M:%S') }}</td>
+        <td>{{ msg.to_phone or '-' }}</td>
+        <td>{{ msg.status }}</td>
+        <td><input class="copy wide" value="{{ msg.body }}" onclick="this.select();document.execCommand('copy');"></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+<section class="block">
+  <h2>Audit κανόνας</h2>
+  <p class="notice-box">Η παρουσία είναι γεγονός. Η απουσία είναι γεγονός. Η αναπλήρωση είναι νέο γεγονός. Καμία παλιά ημερομηνία δεν ξαναγράφεται.</p>
+</section>
+
+<script src="https://unpkg.com/html5-qrcode" defer></script>
+<script src="/static/teacher_scan.js" defer></script>
+{% endblock %}

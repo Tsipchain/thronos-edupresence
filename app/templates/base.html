@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="el">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ settings.app_name }}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="gov-header">
+    <div class="gov-left">
+      <div class="emblem">Θ</div>
+      <div>
+        <div class="small-caps">ΕΛΛΗΝΙΚΗ ΔΗΜΟΚΡΑΤΙΑ</div>
+        <div class="ministry">Thronos EduPresence</div>
+      </div>
+    </div>
+    <div class="gov-title">Ψηφιακή εκπαίδευση και ενδυνάμωση — Παρουσίες με απόδειξη</div>
+    <div class="gov-right">
+      <strong>Thronos 2.0</strong><br><span>hash-only attestations</span>
+    </div>
+  </header>
+  <nav class="breadcrumbs no-print">
+    <a href="/">Αρχική</a>
+    {% block breadcrumbs %}{% endblock %}
+    <span class="nav-spacer"></span>
+    {% if current_user %}
+      <span class="user-pill">{{ current_user.full_name }}</span>
+      <a class="mini-link" href="/logout">Έξοδος</a>
+    {% else %}
+      <a class="user-pill" href="/login">Σύνδεση TaxisNet/Gov mock</a>
+    {% endif %}
+  </nav>
+  <main class="page">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

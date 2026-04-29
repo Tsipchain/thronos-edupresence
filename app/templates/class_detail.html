@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block breadcrumbs %}<span>›</span><a href="/nodes/{{ classroom.node_id }}">{{ classroom.node.name if classroom.node else classroom.location }}</a><span>›</span><span>Τμήμα {{ classroom.name }}</span>{% endblock %}
+{% block content %}
+<a class="back-link no-print" href="/nodes/{{ classroom.node_id or 1 }}">← Πίσω στον κόμβο</a>
+
+<section class="plain-head">
+  <h1>Παρουσίες - {{ classroom.name }}</h1>
+  <p class="muted">{{ classroom.location or (classroom.node.name if classroom.node else 'Κόμβος') }}</p>
+</section>
+
+<section class="block">
+  <h2>Εκπαιδευτής τμήματος</h2>
+  <table class="gov-table slim">
+    <thead><tr><th>Α.Φ.Μ.</th><th>Ονοματεπώνυμο</th><th>Email</th><th>Τηλέφωνο</th></tr></thead>
+    <tbody><tr><td>{{ classroom.teacher_afm or 'demo' }}</td><td>{{ classroom.teacher_name or '-' }}</td><td>{{ classroom.teacher_email or '-' }}</td><td>{{ classroom.teacher_phone or '-' }}</td></tr></tbody>
+  </table>
+</section>
+
+<section class="block">
+  <div class="section-bar">
+    <h2>Νέα καταχώρηση παρουσιών</h2>
+    <form method="post" action="/classes/{{ classroom.id }}/lessons" class="inline-create no-print">
+      <input name="title" value="Μάθημα" aria-label="Τίτλος">
+      <input type="datetime-local" name="starts_at" aria-label="Ημερομηνία ώρα">
+      <input type="number" name="duration_minutes" value="120" aria-label="Λεπτά">
+      <input type="number" name="teaching_hours" value="2" min="1" aria-label="Διδακτικές ώρες">
+      <button class="btn primary">+ Προσθήκη</button>
+    </form>
+  </div>
+  <p class="muted">Όπως στην υπάρχουσα πλατφόρμα: πρώτα δημιουργείς ημέρα/ώρες, μετά δηλώνεις παρόντες. Εδώ προστίθεται SMS link + QR scan.</p>
+</section>
+
+<section class="tabs no-print">
+  <a href="#students">ΣΠΟΥΔΑΣΤΕΣ ΕΓΓΕΓΡΑΜΜΕΝΟΙ ΣΤΟ ΤΜΗΜΑ</a>
+  <a class="active" href="#lessons">ΠΑΡΟΥΣΙΕΣ</a>
+  <a href="#makeups">ΑΝΑΠΛΗΡΩΣΕΙΣ</a>
+</section>
+
+<section id="students" class="block">
+  <div class="section-bar"><h2>Σπουδαστές εγγεγραμμένοι στο τμήμα</h2></div>
+  <table class="gov-table">
+    <thead><tr><th>#</th><th>Ονοματεπώνυμο</th><th>Κ.Α.Υ.Α.Σ.</th><th>Κινητό</th><th>Κατάσταση</th></tr></thead>
+    <tbody>
+      {% for e in enrollments %}
+      <tr><td>{{ loop.index }}</td><td>{{ e.student.full_name }}</td><td>{{ e.student.external_ref or e.student.id }}</td><td>{{ e.student.phone or '-' }}</td><td>{{ status_label(e.student.status) }}</td></tr>
+      {% else %}<tr><td colspan="5" class="muted">Δεν υπάρχουν μαθητές στο τμήμα.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+
+  <details class="no-print add-student-box">
+    <summary>+ Εγγραφή κατανεμημένου ωφελούμενου στο τμήμα</summary>
+    <form method="post" action="/classes/{{ classroom.id }}/enroll" class="inline-form">
+      <select name="student_id">
+        {% for s in students %}
+          <option value="{{ s.id }}">{{ s.full_name }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn">Εγγραφή</button>
+    </form>
+  </details>
+</section>
+
+<section id="lessons" class="block">
+  <div class="section-bar"><h2>Αποτελέσματα παρουσιών</h2></div>
+  <table class="gov-table">
+    <thead><tr><th>Ημερομηνία</th><th>Διάρκεια</th><th>Διδακτικές ώρες</th><th>%</th><th>Κατάσταση</th><th>Ενέργειες</th></tr></thead>
+    <tbody>
+      {% for lesson in lessons %}
+      <tr>
+        <td>{{ lesson.starts_at.strftime('%d/%m/%Y %H:%M') }}</td>
+        <td>{{ lesson.duration_minutes }} λεπτά</td>
+        <td>{{ lesson.teaching_hours }}</td>
+        <td>{{ completion_percent(classroom) }}%</td>
+        <td>{{ status_label(lesson.status) }}</td>
+        <td class="actions"><a title="Προβολή" href="/lessons/{{ lesson.id }}">👁</a><a title="Επεξεργασία" href="/lessons/{{ lesson.id }}">✎</a>{% if lesson.status != 'open' %}<a title="Εκτύπωση" href="/lessons/{{ lesson.id }}/print">🖨</a>{% endif %}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="muted">Δεν υπάρχουν παρουσίες ακόμη. Πατήστε + Προσθήκη.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section id="makeups" class="block">
+  <h2>Κανόνας αναπληρώσεων</h2>
+  <p class="notice-box">Η παλιά απουσία δεν αλλάζει σε παρουσία. Δημιουργείται νέο έντυπο αναπλήρωσης που συνδέεται με την αρχική ημερομηνία.</p>
+</section>
+{% endblock %}

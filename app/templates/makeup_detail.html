@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<a href="/lessons/{{ makeup.original_lesson_id }}">← Πίσω στο αρχικό μάθημα</a>
+<section class="hero">
+  <h1>Αναπλήρωση #{{ makeup.id }}</h1>
+  <p>Μαθητής: <strong>{{ makeup.student.full_name }}</strong></p>
+  <p>Αρχική απουσία: {{ makeup.original_lesson.starts_at.strftime('%d/%m/%Y %H:%M') }}</p>
+</section>
+
+<section class="card">
+  {% if makeup.status != 'completed' %}
+  <h2>Ολοκλήρωση αναπλήρωσης</h2>
+  <form method="post" action="/makeups/{{ makeup.id }}/complete" class="stack">
+    <label>Ημερομηνία/ώρα αναπλήρωσης <input type="datetime-local" name="makeup_date" required></label>
+    <label>Διάρκεια λεπτά <input type="number" name="duration_minutes" value="120"></label>
+    <input name="topic" placeholder="Ενότητα που καλύφθηκε">
+    <input name="student_signature_note" value="Υπογράφηκε φυσικά">
+    <button class="btn primary">Ολοκλήρωση & attestation</button>
+  </form>
+  {% else %}
+    <p class="success">Η αναπλήρωση ολοκληρώθηκε.</p>
+    <a class="btn" href="/makeups/{{ makeup.id }}/print">Εκτύπωση εντύπου</a>
+  {% endif %}
+</section>
+{% endblock %}

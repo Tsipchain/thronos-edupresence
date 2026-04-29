@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="el">
+<head>
+  <meta charset="utf-8">
+  <title>Παρουσίες</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="print-page gov-print">
+  <button class="no-print print-button" onclick="window.print()">Εκτύπωση</button>
+  <section class="official-print-head">
+    <div>
+      <div class="emblem print-emblem">Θ</div>
+      <strong>ΕΛΛΗΝΙΚΗ ΔΗΜΟΚΡΑΤΙΑ</strong><br>
+      <span>Υπουργείο Κοινωνικής Συνοχής και Οικογένειας</span>
+    </div>
+    <div class="right"><strong>Thronos EduPresence</strong><br>hash-only proof</div>
+  </section>
+  <h1>Παρουσίες</h1>
+  <p><strong>Κόμβος:</strong> {{ lesson.classroom.node.name if lesson.classroom.node else (lesson.classroom.location or '-') }}</p>
+  <p><strong>Όνομα τμήματος:</strong> {{ lesson.classroom.name }}</p>
+  <p><strong>Εκπαιδευτής:</strong> {{ lesson.classroom.teacher_name or lesson.created_by }}</p>
+  <p><strong>Ημερομηνία:</strong> {{ lesson.starts_at.strftime('%d/%m/%Y %H:%M') }}</p>
+  <p><strong>Κατάσταση:</strong> {{ status_label(lesson.status) }}{% if lesson.closed_at %} · Κλειδώθηκε {{ lesson.closed_at.strftime('%d/%m/%Y %H:%M') }}{% endif %}</p>
+
+  <table class="print-table gov-table">
+    <thead><tr><th>#</th><th>Ονοματεπώνυμο</th><th>Κ.Α.Υ.Α.Σ.</th><th>Παρουσία</th><th>Μέθοδος</th><th>Υπογραφή</th></tr></thead>
+    <tbody>
+    {% for row in rows %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ row.student.full_name }}</td>
+        <td>{{ row.student.external_ref or row.student.id }}</td>
+        <td>{{ status_label(row.status) }}</td>
+        <td>{{ method_label(row.confirmation_method) }}</td>
+        <td></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p class="notice">Το παρόν αποτυπώνει τη συγκεκριμένη ημερομηνία. Αναπληρώσεις εκδίδονται σε ξεχωριστό έντυπο και δεν μετατρέπουν αναδρομικά την παλιά απουσία σε παρουσία.</p>
+  <p class="signature right">Υπογραφή Εκπαιδευτή</p>
+</body>
+</html>

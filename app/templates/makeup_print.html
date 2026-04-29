@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="el">
+<head>
+  <meta charset="utf-8">
+  <title>Έντυπο Αναπλήρωσης</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="print-page">
+  <button class="no-print btn" onclick="window.print()">Εκτύπωση</button>
+  <section class="print-header">
+    <div><strong>Thronos EduPresence</strong><br>Μητρώο Αναπληρώσεων</div>
+    <div class="right">Έντυπο #{{ makeup.id }}</div>
+  </section>
+  <h1>Έντυπο Αναπλήρωσης Παρουσίας</h1>
+  <p><strong>Μαθητής:</strong> {{ makeup.student.full_name }}</p>
+  <p><strong>Τμήμα:</strong> {{ makeup.original_lesson.classroom.name }}</p>
+  <p><strong>Εκπαιδευτής:</strong> {{ makeup.teacher_name or makeup.original_lesson.created_by }}</p>
+  <p><strong>Αρχική ημερομηνία απουσίας:</strong> {{ makeup.original_lesson.starts_at.strftime('%d/%m/%Y %H:%M') }}</p>
+  <p><strong>Ημερομηνία αναπλήρωσης:</strong> {{ makeup.makeup_date.strftime('%d/%m/%Y %H:%M') if makeup.makeup_date else '-' }}</p>
+  <p><strong>Διάρκεια:</strong> {{ makeup.duration_minutes }} λεπτά</p>
+  <p><strong>Ενότητα:</strong> {{ makeup.topic or '-' }}</p>
+  <p><strong>Evidence hash:</strong> <span class="hash">{{ makeup.evidence_hash }}</span></p>
+  <p><strong>Attestation hash:</strong> <span class="hash">{{ makeup.attestation_hash }}</span></p>
+  <p class="notice"><strong>Σημείωση:</strong> Το παρόν έντυπο δεν αντικαθιστά το αρχικό παρουσιολόγιο. Συνδέεται με την απουσία της αρχικής ημερομηνίας ως τεκμήριο αναπλήρωσης.</p>
+  <p class="signature">Υπογραφή μαθητή: ________________________________</p>
+  <p class="signature">Υπογραφή εκπαιδευτή: ________________________________</p>
+</body>
+</html>

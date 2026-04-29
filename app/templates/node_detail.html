@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block breadcrumbs %}<span>›</span><a href="/nodes/{{ node.id }}">{{ node.name }}</a>{% endblock %}
+{% block content %}
+<a class="back-link no-print" href="/">← Πίσω</a>
+<section class="plain-head">
+  <h1>Διαχείριση Κόμβου - {{ node.name }}</h1>
+  <p class="muted">Φορέας: {{ node.municipality }} · Υπεύθυνος: {{ node.responsible_name or '-' }} · Χωρητικότητα: {{ node.capacity }}</p>
+</section>
+
+<section class="block">
+  <div class="section-bar">
+    <h2>Τμήματα κόμβου</h2>
+    <details class="no-print dropdown-form"><summary class="btn primary">+ Δημιουργία</summary>
+      <form method="post" action="/nodes/{{ node.id }}/classes" class="stack small form-panel">
+        <input name="name" placeholder="Όνομα τμήματος π.χ. Α" required>
+        <input type="number" name="capacity" value="15" min="1" placeholder="Χωρητικότητα">
+        <input name="teacher_name" placeholder="Εκπαιδευτής" value="{{ settings.mock_user_full_name }}">
+        <input name="teacher_afm" placeholder="ΑΦΜ">
+        <input name="teacher_email" placeholder="Email">
+        <input name="teacher_phone" placeholder="Τηλέφωνο">
+        <button class="btn primary">Δημιουργία</button>
+      </form>
+    </details>
+  </div>
+  <table class="gov-table">
+    <thead><tr><th>Όνομα τμήματος</th><th>Χωρητικότητα</th><th>Εκπαιδευτής</th><th>Σύνολο διδακτικών ωρών</th><th>% ολοκλήρωσης</th><th>Ενέργειες</th></tr></thead>
+    <tbody>
+      {% for c in node.classrooms|sort(attribute='name') %}
+      <tr>
+        <td>{{ c.name }}</td>
+        <td>{{ active_enrollments(c)|length }} / {{ c.capacity }}</td>
+        <td>{{ c.teacher_name or '-' }}</td>
+        <td>{{ teaching_hours_done(c) }} / {{ c.target_teaching_hours }}</td>
+        <td>{{ completion_percent(c) }}%</td>
+        <td><a class="mini-btn" href="/classes/{{ c.id }}">Προβολή / Παρουσίες</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="muted">Δεν υπάρχουν τμήματα.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="tabs no-print">
+  <a class="active" href="#selected">ΚΑΤΑΝΕΜΗΜΕΝΟΙ ΩΦΕΛΟΥΜΕΝΟΙ</a>
+  <a href="#standby">ΕΠΙΛΑΧΟΝΤΕΣ</a>
+  <a href="#unable">ΑΔΥΝΑΜΙΑ ΠΑΡΑΚΟΛΟΥΘΗΣΗΣ</a>
+</section>
+
+<section id="selected" class="block">
+  <div class="section-bar">
+    <h2>Κατανεμημένοι ωφελούμενοι</h2>
+    <details class="no-print dropdown-form"><summary class="btn">+ Νέος ωφελούμενος</summary>
+      <form method="post" action="/nodes/{{ node.id }}/students" class="stack small form-panel">
+        <input name="full_name" placeholder="Ονοματεπώνυμο" required>
+        <input name="external_ref" placeholder="ΚΑΥΑΣ">
+        <input name="phone" placeholder="Κινητό/SMS">
+        <input name="email" placeholder="Email">
+        <select name="gender"><option value="">Φύλο</option><option>Άνδρας</option><option>Γυναίκα</option><option>Άλλο</option></select>
+        <input type="hidden" name="status" value="selected">
+        <button class="btn primary">Προσθήκη</button>
+      </form>
+    </details>
+  </div>
+  <table class="gov-table slim">
+    <thead><tr><th>#</th><th>Ονοματεπώνυμο</th><th>ΚΑΥΑΣ</th><th>Φύλο</th><th>Στοιχεία επικοινωνίας</th><th>Τμήμα</th><th>Κατάσταση</th><th>Ενέργειες</th></tr></thead>
+    <tbody>
+      {% for s in selected %}
+      {% set active = active_enrollment_for(s) %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ s.full_name }}</td>
+        <td>{{ s.external_ref or s.id }}</td>
+        <td>{{ s.gender or '-' }}</td>
+        <td>{{ s.phone or '-' }}<br><span class="muted">{{ s.email or '' }}</span></td>
+        <td>
+          {% if active %}
+            {{ active.classroom.name }}
+          {% else %}
+            <form method="post" action="/nodes/{{ node.id }}/students/{{ s.id }}/enroll" class="inline-form compact-select">
+              <select name="classroom_id" required>
+                <option value="">Επιλογή τμήματος</option>
+                {% for c in node.classrooms|sort(attribute='name') %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+              </select>
+              <button class="btn tiny">ΟΚ</button>
+            </form>
+          {% endif %}
+        </td>
+        <td><span class="badge {{ s.status }}">{{ status_label(s.status) }}</span></td>
+        <td>
+          {% if s.status != 'unable_pending' %}
+          <details><summary>Αδυναμία παρακολούθησης</summary>
+            <form method="post" action="/nodes/{{ node.id }}/students/{{ s.id }}/unable/request" class="stack small">
+              <input name="reason" value="Αδυναμία παρακολούθησης">
+              <button class="btn danger">Δήλωση</button>
+            </form>
+          </details>
+          {% else %}<span class="muted">Εκκρεμεί έγκριση</span>{% endif %}
+        </td>
+      </tr>
+      {% else %}<tr><td colspan="8" class="muted">Δεν υπάρχουν κατανεμημένοι ωφελούμενοι.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section id="standby" class="block">
+  <div class="section-bar">
+    <h2>Επιλαχόντες</h2>
+    <form method="post" action="/nodes/{{ node.id }}/allocate-next" onsubmit="return confirm('Να κατανεμηθεί ο πρώτος διαθέσιμος επιλαχών;');"><button class="btn primary">Κατανομή επόμενου διαθέσιμου</button></form>
+  </div>
+  <details class="no-print"><summary>+ Νέος επιλαχών</summary>
+    <form method="post" action="/nodes/{{ node.id }}/students" class="inline-form">
+      <input name="full_name" placeholder="Ονοματεπώνυμο" required>
+      <input name="external_ref" placeholder="ΚΑΥΑΣ">
+      <input name="phone" placeholder="Κινητό/SMS">
+      <input type="hidden" name="status" value="standby">
+      <button class="btn">Προσθήκη</button>
+    </form>
+  </details>
+  <table class="gov-table slim">
+    <thead><tr><th>Σειρά</th><th>Ονοματεπώνυμο</th><th>ΚΑΥΑΣ</th><th>Κινητό</th><th>Κατάσταση</th></tr></thead>
+    <tbody>{% for s in standby %}<tr><td>{{ s.priority_order }}</td><td>{{ s.full_name }}</td><td>{{ s.external_ref or s.id }}</td><td>{{ s.phone or '-' }}</td><td>{{ status_label(s.status) }}</td></tr>{% else %}<tr><td colspan="5" class="muted">Δεν υπάρχουν επιλαχόντες.</td></tr>{% endfor %}</tbody>
+  </table>
+</section>
+
+<section id="unable" class="block">
+  <h2>Αδυναμία παρακολούθησης</h2>
+  <p class="notice-box">Στην πράξη: ο εκπαιδευτής/υπεύθυνος δηλώνει αδυναμία, ο διαχειριστής εγκρίνει ή απορρίπτει, και μόνο μετά ανοίγει θέση για επιλαχόντα.</p>
+  <table class="gov-table slim">
+    <thead><tr><th>Ημερομηνία</th><th>Ωφελούμενος</th><th>Αιτία</th><th>Κατάσταση</th><th>Ενέργειες διαχειριστή</th></tr></thead>
+    <tbody>
+      {% for r in unable_requests %}
+      <tr>
+        <td>{{ r.created_at.strftime('%d/%m/%Y %H:%M') }}</td><td>{{ r.student.full_name }}</td><td>{{ r.reason }}</td><td>{{ status_label(r.status) }}</td>
+        <td>
+          {% if r.status == 'pending' %}
+          <form method="post" action="/nodes/{{ node.id }}/unable/{{ r.id }}/approve" class="inline-form"><button class="btn primary">Έγκριση</button></form>
+          <form method="post" action="/nodes/{{ node.id }}/unable/{{ r.id }}/reject" class="inline-form"><button class="btn">Απόρριψη</button></form>
+          {% else %}<span class="muted">{{ r.decided_by or '-' }}</span>{% endif %}
+        </td>
+      </tr>
+      {% else %}<tr><td colspan="5" class="muted">Δεν υπάρχουν δηλώσεις αδυναμίας.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

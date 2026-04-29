@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="plain-head">
+  <h1>Επιλογή κόμβου</h1>
+  <p class="muted">Επιλέξτε κόμβο για μετάβαση στις αναθέσεις τμημάτων. Ο κόμβος εμφανίζεται μία φορά, ακόμη κι αν έχει πολλά τμήματα.</p>
+</section>
+
+<table class="gov-table">
+  <thead>
+    <tr><th>Φορέας</th><th>Όνομα κόμβου</th><th>Τμήματα</th><th>Ωφελούμενοι</th><th>Ενέργειες</th></tr>
+  </thead>
+  <tbody>
+    {% for node in nodes %}
+    <tr>
+      <td>{{ node.municipality }}</td>
+      <td>{{ node.name }}</td>
+      <td>{{ node.classrooms|length }}</td>
+      <td>{{ node_selected_counts.get(node.id, 0) }} / {{ node.capacity }}</td>
+      <td><a href="/nodes/{{ node.id }}">Μετάβαση στον κόμβο</a></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="muted">Δεν υπάρχει κόμβος ακόμη.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<section class="dev-panel no-print">
+  <details>
+    <summary>Εργαλεία demo / Thronos</summary>
+    <div class="grid two compact-grid">
+      <section class="card flat">
+        <h2>Νέος κόμβος</h2>
+        <form method="post" action="/nodes" class="stack">
+          <input name="municipality" placeholder="Φορέας / Δήμος" value="ΘΕΣΣΑΛΟΝΙΚΗΣ">
+          <input name="name" placeholder="Όνομα κόμβου" required>
+          <input name="responsible_name" placeholder="Διοικητικός υπεύθυνος">
+          <input type="number" name="capacity" value="15" min="1">
+          <button class="btn primary">Δημιουργία κόμβου</button>
+        </form>
+      </section>
+      <section class="card flat">
+        <h2>Εκκρεμότητες</h2>
+        <p>Εκκρεμείς αναπληρώσεις: <strong>{{ pending_makeups }}</strong></p>
+        <p>Εκκρεμείς αδυναμίες παρακολούθησης: <strong>{{ pending_unable }}</strong></p>
+        <p class="muted">Η αντικατάσταση γίνεται από επιλαχόντα μόνο μετά από έγκριση αδυναμίας.</p>
+      </section>
+    </div>
+  </details>
+</section>
+{% endblock %}

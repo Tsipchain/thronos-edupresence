@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="login-card">
+  <h1>Σύνδεση στο Thronos EduPresence</h1>
+  <p class="muted">Η υποδοχή για gov.gr / TaxisNet υπάρχει. Όταν δεν έχουν μπει πραγματικά provider env vars, η σύνδεση γίνεται σε ασφαλές mock για δοκιμές πεδίου.</p>
+  <a class="btn primary big" href="/auth/gov/start">Σύνδεση με TaxisNet / Gov</a>
+  <p class="notice-box">Τρέχον mode: <strong>{{ settings.auth_provider }}</strong>. Για αύριο μπορεί να μείνει mock.</p>
+</section>
+{% endblock %}
