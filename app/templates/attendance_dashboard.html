@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block breadcrumbs %}
+  <span>›</span><a href="/nodes/{{ classroom.node_id }}">{{ classroom.node.name if classroom.node else 'Κόμβος' }}</a>
+  <span>›</span><a href="/classes/{{ classroom.id }}">{{ classroom.name }}</a>
+  <span>›</span><span>Dashboard Παρουσιών</span>
+{% endblock %}
+{% block content %}
+<style>
+.att-wrap{overflow-x:auto;}
+.att-table{border-collapse:collapse;font-size:.82rem;min-width:600px;width:100%;}
+.att-table th,.att-table td{border:1px solid #d0d7de;padding:5px 8px;white-space:nowrap;}
+.att-table thead th{background:#1a3a5c;color:#fff;font-weight:600;text-align:center;}
+.att-table thead th.student-col{text-align:left;min-width:170px;}
+.att-table tbody tr:nth-child(even){background:#f6f8fa;}
+.cell-present{background:#d4edda;color:#155724;text-align:center;font-weight:700;}
+.cell-absent{background:#f8d7da;color:#721c24;text-align:center;}
+.cell-late{background:#fff3cd;color:#856404;text-align:center;}
+.cell-makeup{background:#d1ecf1;color:#0c5460;text-align:center;}
+.cell-pending{background:#e9ecef;color:#6c757d;text-align:center;}
+.pct-high{color:#155724;font-weight:700;}
+.pct-mid{color:#856404;font-weight:700;}
+.pct-low{color:#721c24;font-weight:700;}
+.cert-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:.75rem;font-weight:600;}
+.cert-eligible{background:#d4edda;color:#155724;}
+.cert-pending{background:#e9ecef;color:#6c757d;}
+.cert-issued{background:#cce5ff;color:#004085;}
+.summary-bar{display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:1.2rem;}
+.stat-card{background:#fff;border:1px solid #d0d7de;border-radius:8px;padding:.7rem 1.2rem;min-width:130px;}
+.stat-card .val{font-size:1.6rem;font-weight:700;color:#1a3a5c;}
+.stat-card .lbl{font-size:.78rem;color:#6c757d;}
+.btn-l2e{background:#1a3a5c;color:#fff;border:none;padding:.45rem 1.2rem;border-radius:6px;cursor:pointer;font-size:.9rem;}
+.btn-l2e:hover{background:#0f2540;}
+.btn-l2e:disabled{background:#aaa;cursor:not-allowed;}
+.legend{display:flex;gap:1rem;flex-wrap:wrap;font-size:.78rem;margin-bottom:.8rem;}
+.leg{display:flex;align-items:center;gap:.3rem;}
+.leg-dot{width:14px;height:14px;border-radius:3px;display:inline-block;}
+</style>
+
+<a class="back-link no-print" href="/classes/{{ classroom.id }}">← Πίσω στο τμήμα</a>
+
+<section class="plain-head">
+  <h1>Dashboard Παρουσιών — {{ classroom.name }}</h1>
+  <p class="muted">{{ classroom.node.name if classroom.node else classroom.location }} &nbsp;·&nbsp;
+    <strong>{{ lessons|length }}</strong> μαθήματα &nbsp;·&nbsp;
+    <strong>{{ students|length }}</strong> σπουδαστές
+    {% if settings.l2e_enabled %}&nbsp;·&nbsp;L2E ενεργό ✓{% endif %}
+  </p>
+</section>
+
+<section class="block">
+  <div class="summary-bar">
+    <div class="stat-card">
+      <div class="val">{{ hours_done }}/{{ classroom.target_teaching_hours or 40 }}</div>
+      <div class="lbl">Διδακτικές Ώρες</div>
+    </div>
+    <div class="stat-card">
+      <div class="val">{{ completion_pct }}%</div>
+      <div class="lbl">Πρόοδος Προγράμματος</div>
+    </div>
+    <div class="stat-card">
+      <div class="val">{{ eligible_count }}</div>
+      <div class="lbl">Δικαιούχοι Πτυχίου</div>
+    </div>
+    <div class="stat-card">
+      <div class="val">{{ students|length }}</div>
+      <div class="lbl">Εγγεγραμμένοι</div>
+    </div>
+    {% if settings.l2e_enabled %}
+    <div class="stat-card no-print" style="margin-left:auto;align-self:center;">
+      {% if classroom.l2e_reported_at %}
+        <div style="font-size:.8rem;color:#155724;margin-bottom:.3rem;">✓ Εστάλη στο L2E<br><span style="color:#6c757d">{{ classroom.l2e_reported_at.strftime('%d/%m/%Y %H:%M') }}</span></div>
+        <form method="post" action="/classes/{{ classroom.id }}/l2e-complete" style="display:inline">
+          <button class="btn-l2e" style="font-size:.78rem;">↻ Εκ νέου αποστολή</button>
+        </form>
+      {% else %}
+        <form method="post" action="/classes/{{ classroom.id }}/l2e-complete">
+          <button class="btn-l2e">📤 Αποστολή στο L2E</button>
+        </form>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="legend">
+    <span class="leg"><span class="leg-dot" style="background:#d4edda;"></span>Παρών</span>
+    <span class="leg"><span class="leg-dot" style="background:#f8d7da;"></span>Απών</span>
+    <span class="leg"><span class="leg-dot" style="background:#fff3cd;"></span>Καθυστέρηση</span>
+    <span class="leg"><span class="leg-dot" style="background:#d1ecf1;"></span>Αναπλήρωση</span>
+    <span class="leg"><span class="leg-dot" style="background:#e9ecef;"></span>Εκκρεμεί</span>
+  </div>
+
+  <div class="att-wrap">
+    <table class="att-table">
+      <thead>
+        <tr>
+          <th class="student-col">#&nbsp; Σπουδαστής</th>
+          {% for lesson in lessons %}
+          <th title="{{ lesson.title }}">{{ loop.index }}<br>
+            <span style="font-weight:400;font-size:.7rem;">{{ lesson.starts_at.strftime('%d/%m') }}</span>
+          </th>
+          {% endfor %}
+          <th>%</th>
+          <th>Παρ/Απ</th>
+          {% if settings.l2e_enabled %}<th>L2E</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td><strong>{{ loop.index }}</strong>&nbsp; {{ row.student.full_name }}
+            {% if row.student.thr_wallet %}<br><span style="font-size:.7rem;color:#6c757d;">🔑 wallet</span>{% endif %}
+          </td>
+          {% for lesson in lessons %}
+            {% set att = row.by_lesson.get(lesson.id) %}
+            {% if att %}
+              {% if att.status == 'present' %}<td class="cell-present" title="{{ method_label(att.confirmation_method) }}">✓</td>
+              {% elif att.status in ['absent','student_only_unverified'] %}
+                {% if att.makeup %}<td class="cell-makeup" title="Αναπλήρωση">↺</td>
+                {% else %}<td class="cell-absent">✗</td>{% endif %}
+              {% elif att.status == 'late' %}<td class="cell-late">⏱</td>
+              {% elif att.status == 'left_early' %}<td class="cell-late">↩</td>
+              {% else %}<td class="cell-pending">·</td>
+              {% endif %}
+            {% else %}
+              <td class="cell-pending">—</td>
+            {% endif %}
+          {% endfor %}
+          {# % column #}
+          {% set pct = row.pct %}
+          <td style="text-align:center;">
+            {% if pct >= 80 %}<span class="pct-high">{{ pct }}%</span>
+            {% elif pct >= 60 %}<span class="pct-mid">{{ pct }}%</span>
+            {% else %}<span class="pct-low">{{ pct }}%</span>{% endif %}
+          </td>
+          <td style="text-align:center;font-size:.82rem;">{{ row.present }}/{{ row.total }}</td>
+          {% if settings.l2e_enabled %}
+          <td style="text-align:center;">
+            {% if row.cert_id %}
+              <span class="cert-badge cert-issued" title="{{ row.cert_id }}">🎓 {{ row.cert_id[:12] }}…</span>
+            {% elif pct >= (settings.l2e_attendance_threshold_pct or 80) %}
+              <span class="cert-badge cert-eligible">✓ Δικαιούχος</span>
+            {% else %}
+              <span class="cert-badge cert-pending">Εκκρεμεί</span>
+            {% endif %}
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="block no-print">
+  <h2>Αναλυτικές Παρουσίες ανά Μάθημα</h2>
+  <table class="gov-table slim">
+    <thead><tr><th>#</th><th>Ημερομηνία</th><th>Τίτλος</th><th>Διδ. Ώρες</th><th>Παρόντες</th><th>%</th><th>Κατάσταση</th></tr></thead>
+    <tbody>
+    {% for lesson in lessons %}
+    {% set present_count = namespace(v=0) %}
+    {% for row in rows %}{% if row.by_lesson.get(lesson.id) and row.by_lesson[lesson.id].status == 'present' %}{% set present_count.v = present_count.v + 1 %}{% endif %}{% endfor %}
+    <tr>
+      <td>{{ loop.index }}</td>
+      <td>{{ lesson.starts_at.strftime('%d/%m/%Y %H:%M') }}</td>
+      <td><a href="/lessons/{{ lesson.id }}">{{ lesson.title }}</a></td>
+      <td>{{ lesson.teaching_hours }}</td>
+      <td>{{ present_count.v }}/{{ rows|length }}</td>
+      <td>{% if rows|length > 0 %}{{ (present_count.v / rows|length * 100)|round|int }}%{% else %}—{% endif %}</td>
+      <td>{{ status_label(lesson.status) }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="muted">Δεν υπάρχουν μαθήματα ακόμη.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}
