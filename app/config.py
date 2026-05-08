@@ -15,10 +15,10 @@ class Settings(BaseSettings):
     thronos_attest_api_key: str = ""
     auto_seed_demo: bool = True
 
-    # CORS - comma-separated origins for Flutter/mobile clients
+    # CORS — comma-separated origins for Flutter/mobile clients
     cors_origins: str = "http://localhost:3000,http://localhost:8080"
 
-    # Login / gov.gr / TaxisNet
+    # Authentication
     auth_required: bool = False
     auth_provider: str = "mock"  # mock | gov
     session_cookie_name: str = "thronos_edu_session"
@@ -55,6 +55,15 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from_email: str = "noreply@thronoschain.org"
     smtp_from_name: str = "Thronos EduPresence"
+
+    # ==========================================================================
+    # Thronos Chain L2E Integration (Learn-to-Earn / University Systems)
+    # ==========================================================================
+    l2e_enabled: bool = False                              # Αναφαιρείτε σε production
+    l2e_base_url: str = "https://api.thronoschain.org"    # Main chain URL
+    l2e_api_key: str = ""                                  # APP_AI_KEY του main chain
+    l2e_tenant_id: str = "ministry_edu"                   # Tenant identifier
+    l2e_attendance_threshold_pct: int = 80                # % παρουσίας για reward eligibility
 
     @property
     def cors_origins_list(self) -> list[str]:

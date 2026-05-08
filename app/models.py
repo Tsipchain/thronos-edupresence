@@ -29,9 +29,11 @@ class Student(Base):
     full_name: Mapped[str] = mapped_column(String(200), nullable=False)
     phone: Mapped[str] = mapped_column(String(50), default="")
     email: Mapped[str] = mapped_column(String(200), default="")
-    external_ref: Mapped[str] = mapped_column(String(120), default="")  # ΚΑΥΑΣ / external ref
+    external_ref: Mapped[str] = mapped_column(String(120), default="")  # ΚΑΥΑΣ / εξωτερικός κωδικός
+    tax_id: Mapped[str] = mapped_column(String(20), default="")          # ΑΦΜ για ταύτιση με L2E
+    thr_wallet: Mapped[str] = mapped_column(String(120), default="")     # THR wallet για ανταμοιβές
     gender: Mapped[str] = mapped_column(String(40), default="")
-    status: Mapped[str] = mapped_column(String(60), default="selected")  # selected | standby | unable_pending | unable_approved | unable_rejected
+    status: Mapped[str] = mapped_column(String(60), default="selected")  # selected | standby | unable_*
     priority_order: Mapped[int] = mapped_column(Integer, default=0)
     inability_reason: Mapped[str] = mapped_column(String(250), default="")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -53,6 +55,10 @@ class Classroom(Base):
     location: Mapped[str] = mapped_column(String(250), default="")
     capacity: Mapped[int] = mapped_column(Integer, default=15)
     target_teaching_hours: Mapped[int] = mapped_column(Integer, default=40)
+    # L2E integration fields
+    l2e_course_id: Mapped[str] = mapped_column(String(120), default="")    # ID στο main chain L2E
+    l2e_tenant_id: Mapped[str] = mapped_column(String(120), default="")    # Tenant (ministry_edu)
+    l2e_reported_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # τελευταίο report
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
 
