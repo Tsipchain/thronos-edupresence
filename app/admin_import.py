@@ -85,3 +85,68 @@ def import_class(
         "students_created": len(created),
         "dashboard_url": f"{settings.public_base_url}/classes/{classroom.id}",
     }
+
+
+# ---------------------------------------------------------------------------
+# Bulk notify existing students
+# ---------------------------------------------------------------------------
+
+class SendClassSmsRequest(BaseModel):
+    class_id: int
+    message_template: str = (
+        "Γεια {name}! Παρακολουθήστε την παρουσία σας στο ThrEDU: {url}"
+    )
+
+
+@router.post("/send-class-sms")
+def send_class_sms(
+    data: SendClassSmsRequest,
+    db: Annotated[Session, Depends(get_db)],
+    _: None = Depends(_check_admin_key),
+):
+    """
+    Send one SMS to every active student enrolled in a classroom.
+    Uses whichever SMS_PROVIDER is configured (telesign | viber | mock).
+    """
+    from app.sms import send_sms
+
+    classroom = db.query(Classroom).filter(Classroom.id == data.class_id).first()
+    if not classroom:
+        raise HTTPException(status_code=404, detail="Classroom not found")
+
+    enrollments = (
+        db.query(Enrollment)
+        .filter(Enrollment.classroom_id == data.class_id, Enrollment.status == "active")
+        .all()
+    )
+
+    results = []
+    for enr in enrollments:
+        student = db.query(Student).filter(Student.id == enr.student_id).first()
+        if not student or not student.phone:
+            results.append({"student": getattr(student, "full_name", "?"), "status": "skipped_no_phone"})
+            continue
+
+        dashboard_url = f"{settings.public_base_url}/classes/{data.class_id}"
+        first_name = student.full_name.split()[0] if student.full_name else student.full_name
+        body = data.message_template.format(name=first_name, url=dashboard_url)
+
+        result = send_sms(student.phone, body)
+        results.append({
+            "student": student.full_name,
+            "phone": student.phone[:4] + "****",  # mask for response
+            "status": result.status,
+            "provider": result.provider,
+        })
+
+    sent = sum(1 for r in results if r["status"] == "sent")
+    write_audit(db, "bulk_sms", "classroom", data.class_id,
+                actor="admin", detail={"sent": sent, "total": len(results)})
+
+    return {
+        "ok": True,
+        "classroom": classroom.name,
+        "total": len(results),
+        "sent": sent,
+        "results": results,
+    }
