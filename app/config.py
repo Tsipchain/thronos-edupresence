@@ -15,8 +15,10 @@ class Settings(BaseSettings):
     thronos_attest_api_key: str = ""
     auto_seed_demo: bool = True
 
-    # Login / gov.gr / TaxisNet entrypoint.
-    # mock mode keeps the app usable for field tests without real gov credentials.
+    # CORS — comma-separated origins for Flutter/mobile clients
+    cors_origins: str = "http://localhost:3000,http://localhost:8080"
+
+    # Authentication
     auth_required: bool = False
     auth_provider: str = "mock"  # mock | gov
     session_cookie_name: str = "thronos_edu_session"
@@ -31,14 +33,40 @@ class Settings(BaseSettings):
     gov_oauth_client_secret: str = ""
     gov_oauth_redirect_uri: str = ""
 
-    # SMS / notification settings.
-    # Default mock mode writes messages to the SMS outbox without calling a real provider.
-    sms_provider: str = "mock"  # mock | twilio | http_get
+    # SMS / notifications
+    sms_provider: str = "mock"  # mock | twilio | http_get | viber
     sms_dry_run: bool = False
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""
     twilio_from_number: str = ""
     generic_sms_url: str = ""
     generic_sms_token: str = ""
+
+    # Viber Business Messages
+    viber_bot_token: str = ""
+    viber_sender_name: str = "ThrEDuPresence"
+    viber_min_api_version: int = 1
+
+    # SMTP email
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_use_tls: bool = True
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = "noreply@thronoschain.org"
+    smtp_from_name: str = "Thronos EduPresence"
+
+    # ==========================================================================
+    # Thronos Chain L2E Integration (Learn-to-Earn / University Systems)
+    # ==========================================================================
+    l2e_enabled: bool = False                              # Αναφαιρείτε σε production
+    l2e_base_url: str = "https://api.thronoschain.org"    # Main chain URL
+    l2e_api_key: str = ""                                  # APP_AI_KEY του main chain
+    l2e_tenant_id: str = "ministry_edu"                   # Tenant identifier
+    l2e_attendance_threshold_pct: int = 80                # % παρουσίας για reward eligibility
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
 settings = Settings()
