@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin Panel — ThrEDU</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#127979;</text></svg>">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',sans-serif;background:#0f172a;color:#f1f5f9;min-height:100vh;padding:32px 16px}
+  .container{max-width:900px;margin:0 auto}
+  header{display:flex;align-items:center;gap:12px;margin-bottom:32px}
+  header h1{font-size:1.6rem;color:#f8fafc}
+  header span{font-size:1.8rem}
+  .badge{background:#1e3a5f;color:#7dd3fc;padding:4px 12px;border-radius:20px;font-size:.75rem;font-weight:700;margin-left:auto}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+  .card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:20px;text-decoration:none;display:block;transition:.2s}
+  .card:hover{border-color:#6366f1;box-shadow:0 0 0 2px rgba(99,102,241,.3)}
+  .card h2{color:#f8fafc;font-size:1.1rem;margin-bottom:4px}
+  .card p{color:#64748b;font-size:.85rem}
+  .card .meta{margin-top:12px;font-size:.8rem;color:#94a3b8;display:flex;gap:12px}
+  .card .meta span{background:#0f172a;padding:4px 8px;border-radius:6px}
+  .empty{text-align:center;color:#475569;padding:60px;background:#1e293b;border-radius:12px}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <span>&#127979;</span>
+    <h1>ThrEDU Admin Panel</h1>
+    <div class="badge">&#128274; Admin</div>
+  </header>
+
+  <p style="color:#94a3b8;margin-bottom:24px">Επιλέξτε τμήμα για διαχείριση τηλεφώνων και αποστολή SMS στους μαθητές.</p>
+
+  {% if classrooms %}
+  <div class="grid">
+    {% for cls in classrooms %}
+    <a href="/admin/class/{{ cls.id }}?key={{ key }}" class="card">
+      <h2>{{ cls.name }}</h2>
+      <p>{{ cls.teacher_name or 'Εκπαιδευτικός' }}</p>
+      <div class="meta">
+        <span>&#128100; {{ cls.enrollments|selectattr('status','eq','active')|list|length }} μαθητές</span>
+        {% if cls.node %}<span>&#128205; {{ cls.node.name }}</span>{% endif %}
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">
+    <p style="font-size:2rem;margin-bottom:12px">&#128203;</p>
+    <p>Δεν υπάρχουν τμήματα ακόμα.</p>
+  </div>
+  {% endif %}
+</div>
+</body>
+</html>

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin — ThrEDU</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#127979;</text></svg>">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',sans-serif;background:#0f172a;display:flex;align-items:center;justify-content:center;min-height:100vh}
+  .card{background:#1e293b;border:1px solid #334155;border-radius:16px;padding:40px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  h1{color:#f8fafc;font-size:1.5rem;margin-bottom:8px}
+  p{color:#94a3b8;font-size:.9rem;margin-bottom:24px}
+  label{display:block;color:#cbd5e1;font-size:.85rem;margin-bottom:6px;font-weight:600}
+  input[type=password]{width:100%;padding:12px 16px;background:#0f172a;border:1px solid #475569;border-radius:8px;color:#f1f5f9;font-size:1rem;outline:none;transition:.2s}
+  input[type=password]:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.2)}
+  button{width:100%;margin-top:16px;padding:13px;background:#6366f1;color:#fff;border:none;border-radius:8px;font-size:1rem;font-weight:600;cursor:pointer;transition:.2s}
+  button:hover{background:#4f46e5}
+  .error{background:#450a0a;border:1px solid #dc2626;color:#fca5a5;padding:10px 14px;border-radius:8px;font-size:.85rem;margin-bottom:16px}
+  .logo{font-size:2.5rem;text-align:center;margin-bottom:20px}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">&#127979;</div>
+  <h1>ThrEDU Admin</h1>
+  <p>Εισάγετε το κλειδί διαχειριστή για πρόσβαση.</p>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <form method="POST" action="/admin">
+    <label for="key">Admin Key</label>
+    <input type="password" id="key" name="key" placeholder="••••••••" autofocus required>
+    <button type="submit">Είσοδος</button>
+  </form>
+</div>
+</body>
+</html>
