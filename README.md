@@ -1,91 +1,252 @@
 # Thronos EduPresence
 
-Gov-style MVP for attendance, QR proof, SMS links, makeups, standby allocation, and hash-only attestations.
+> Σύστημα Ψηφιακής Διαχείρισης Παρουσιών Σεμιναρίων — Υπουργείο Οικογένειας
 
-## What it includes
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com)
 
-- Node → departments/classes → beneficiaries, matching the practical platform flow.
-- Selected beneficiaries, standby beneficiaries, and inability-to-attend workflow.
-- Admin approval/rejection for inability to attend.
-- Allocation of next standby beneficiary after approval.
-- Lesson/session creation with date/time, duration, teaching hours.
-- Student SMS/mobile link.
-- Student QR generated on phone.
-- Teacher QR scanner.
-- Teacher manual truth entry with reason for people without phone or with technical issues.
-- Locked daily attendance sheet.
-- Makeup attendance as a new document; it does not rewrite the old absence.
-- Mock gov.gr/TaxisNet login scaffold, with future env slots for real OAuth/OIDC provider.
-- Mock SMS outbox by default; Twilio and generic HTTP SMS are already supported by config.
-- Hash-only attestation payloads. Do not put PII on-chain.
+---
 
-## Run locally
+## Περιγραφή
+
+Το **Thronos EduPresence** είναι web εφαρμογή για τη **διαχείριση παρουσιών** σε σεμινάρια συγχρηματοδοτούμενων προγραμμάτων (Ψηφιακή Ενδυνάμωση Τρίτης Ηλικίας, Κυβερνοασφάλεια κ.ά.). Διασφαλίζει **πλήρη διαφάνεια και ελεγξιμότητα** μέσω:
+
+- **Διπλής επιβεβαίωσης παρουσίας**: QR code μαθητή + scan καθηγητή
+- **Ατομικών συνδέσμων** αποστολής μέσω SMS/Viber σε κάθε εκπαιδευόμενο
+- **Blockchain-style attestation** (Thronos Chain) για κάθε καταχώρηση παρουσίας
+- **Διαχείρισης αναπληρώσεων** με αλυσίδα αποδεικτικών
+- **Audit log** για κάθε ενέργεια χρήστη
+
+---
+
+## Αρχιτεκτονική
+
+```
+┌─────────────────────────────────────────────────────┐
+│               Railway (thronosEDu.thronoschain.org)  │
+│                                                     │
+│  FastAPI (Python 3.12)  ←→  SQLite / PostgreSQL     │
+│  Jinja2 Templates              /app/data/           │
+│  uvicorn (ASGI)                                     │
+│                                                     │
+│  Notifications:  SMS (Twilio) | Viber Business API  │
+│                  Email (SMTP)                       │
+└─────────────────────────────────────────────────────┘
+         ↑ REST API (CORS-enabled)
+    Flutter Mobile App / Browser
+```
+
+### Κύριες Οντότητες
+
+| Οντότητα | Περιγραφή |
+|---|---|
+| **Node** | Κόμβος / τοποθεσία υλοποίησης |
+| **Classroom** | Τμήμα σεμιναρίου (καθηγητής, χωρητικότητα) |
+| **Student** | Εκπαιδευόμενος (επιλεχθείς / επιλαχών) |
+| **Enrollment** | Εγγραφή μαθητή σε τμήμα |
+| **Lesson** | Διδακτική συνεδρία |
+| **Attendance** | Εγγραφή παρουσίας ανά μαθητή/μάθημα |
+| **Makeup** | Αναπλήρωση απουσίας |
+| **Attestation** | Κρυπτογραφική αποτύπωση αποτελέσματος |
+
+---
+
+## Ροή Επιβεβαίωσης Παρουσίας
+
+```
+1. Καθηγητής ανοίγει μάθημα  →  Lesson status: "open"
+2. Σύστημα δημιουργεί Attendance row ανά εγγεγραμμένο μαθητή
+3. Καθηγητής πατά "Αποστολή Links" (SMS/Viber)
+4. Κάθε μαθητής λαμβάνει προσωπικό σύνδεσμο (TTL: 8 ώρες)
+5a. Μαθητής ανοίγει link → εμφανίζει QR code (TTL: 70 δευτ.)
+5b. Καθηγητής σκανάρει QR → Attendance: "present" (διπλή επιβ.)
+   ή
+5c. Καθηγητής καταχωρεί χειροκίνητα (παρών/απών/καθυστ.)
+6. Καθηγητής κλείνει μάθημα  →  Attestation hash γράφεται
+7. Εκτύπωση Κατάστασης Παρουσιών (PDF-ready)
+```
+
+---
+
+## Εγκατάσταση & Εκτέλεση
+
+### Τοπικά (Development)
 
 ```bash
-python -m venv .venv
-.venv\Scripts\activate
+git clone https://github.com/tsipchain/thronos-edupresence.git
+cd thronos-edupresence
+
+cp .env.example .env
+# Επεξεργαστείτε το .env με τις τιμές σας
+
 pip install -r requirements.txt
-copy .env.example .env
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --port 8000
 ```
 
-Open:
+Πλοηγηθείτε στο: http://localhost:8000
 
-```txt
-http://127.0.0.1:8000
-```
-
-## Field test tomorrow
-
-Default SMS mode is mock. Press **Αποστολή SMS links σε όλους** and copy links from the SMS outbox.
-
-For phone testing on the same Wi-Fi, set:
-
-```env
-PUBLIC_BASE_URL=http://YOUR_LAPTOP_LAN_IP:8000
-SMS_PROVIDER=mock
-```
-
-For phone testing over mobile data, run ngrok:
+### Docker
 
 ```bash
-ngrok http 8000
+docker build -t thronos-edupresence .
+docker run -p 8000:8000 \
+  -v $(pwd)/data:/app/data \
+  --env-file .env \
+  thronos-edupresence
 ```
 
-Set:
+---
 
-```env
-PUBLIC_BASE_URL=https://YOUR-NGROK-URL
-SMS_PROVIDER=mock
+## Deploy στο Railway
+
+### 1. Δημιουργία Project
+
+1. Πηγαίνετε στο [railway.com](https://railway.com) → New Project → Deploy from GitHub
+2. Συνδέστε το repository `tsipchain/thronos-edupresence`
+3. Railway θα ανιχνεύσει αυτόματα το `Dockerfile`
+
+### 2. Volume για Persistent Database
+
+Στο Railway dashboard:
+- **Add Volume** → Mount path: `/app/data`
+- Αυτό διασφαλίζει ότι η βάση δεδομένων **δεν χάνεται** σε redeploy
+
+### 3. Environment Variables
+
+Στο Railway dashboard → **Variables**, προσθέστε:
+
+#### Βασικά (ΑΠΑΡΑΙΤΗΤΑ)
+
+| Variable | Τιμή |
+|---|---|
+| `PUBLIC_BASE_URL` | `https://thronosEDu.thronoschain.org` |
+| `TOKEN_SECRET` | *(τυχαίο string 32+ χαρακτήρων)* |
+| `ENVIRONMENT` | `production` |
+| `AUTO_SEED_DEMO` | `false` |
+| `DATABASE_URL` | `sqlite:////app/data/edupresence_v4.db` |
+| `CORS_ORIGINS` | `https://thronosEDu.thronoschain.org` |
+
+> Δημιουργήστε TOKEN_SECRET: `python -c "import secrets; print(secrets.token_hex(32))"`
+
+#### Viber Business Messages
+
+| Variable | Τιμή |
+|---|---|
+| `SMS_PROVIDER` | `viber` |
+| `VIBER_BOT_TOKEN` | *(από το Viber Partners dashboard)* |
+| `VIBER_SENDER_NAME` | `ThrEDuPresence` |
+
+> Αποκτήστε Viber Bot Token: https://partners.viber.com → Create Bot Account
+
+#### SMTP Email
+
+| Variable | Τιμή |
+|---|---|
+| `SMTP_HOST` | `smtp.gmail.com` |
+| `SMTP_PORT` | `587` |
+| `SMTP_USE_TLS` | `true` |
+| `SMTP_USERNAME` | `your@gmail.com` |
+| `SMTP_PASSWORD` | *(App Password από Google Account)* |
+| `SMTP_FROM_EMAIL` | `noreply@thronoschain.org` |
+
+#### Αυθεντικοποίηση
+
+| Variable | Τιμή |
+|---|---|
+| `AUTH_REQUIRED` | `true` |
+| `AUTH_PROVIDER` | `mock` (ή `gov` για TaxisNet) |
+
+### 4. Custom Domain
+
+Στο Railway dashboard → **Settings → Domains**:
+- Add custom domain: `thronosEDu.thronoschain.org`
+- Προσθέστε CNAME record στο DNS: `thronosEDu.thronoschain.org → <your-app>.up.railway.app`
+
+### 5. Επαλήθευση
+
+```bash
+curl https://thronosEDu.thronoschain.org/health
+# Αναμενόμενη απάντηση:
+# {"ok": true, "service": "Thronos EduPresence", "environment": "production"}
 ```
 
-## Real SMS later
+---
 
-```env
-SMS_PROVIDER=twilio
-TWILIO_ACCOUNT_SID=...
-TWILIO_AUTH_TOKEN=...
-TWILIO_FROM_NUMBER=...
-PUBLIC_BASE_URL=https://edupresence.thronoschain.org
+## Flutter App — Σύνδεση με Production API
+
+Στο Flutter app, ορίστε το base URL:
+
+```dart
+const String apiBaseUrl = 'https://thronosEDu.thronoschain.org';
 ```
 
-## Gov/TaxisNet later
+**CORS**: Το API επιτρέπει cross-origin αιτήματα από τα origins που ορίζονται στο `CORS_ORIGINS`.
 
-The app currently has a mock login that behaves like a future gov.gr/TaxisNet entrypoint. When real provider details are available:
+Κύρια API endpoints:
 
-```env
-AUTH_PROVIDER=gov
-AUTH_REQUIRED=true
-GOV_OAUTH_AUTHORIZE_URL=...
-GOV_OAUTH_TOKEN_URL=...
-GOV_OAUTH_USERINFO_URL=...
-GOV_OAUTH_CLIENT_ID=...
-GOV_OAUTH_CLIENT_SECRET=...
-GOV_OAUTH_REDIRECT_URI=https://edupresence.thronoschain.org/auth/gov/callback
+| Method | Endpoint | Περιγραφή |
+|---|---|---|
+| GET | `/health` | Health check |
+| GET | `/api/lessons/{id}/student-links` | Σύνδεσμοι παρουσίας |
+| POST | `/api/lessons/{id}/scan` | Scan QR μαθητή |
+| GET | `/s/{token}` | Επιβεβαίωση παρουσίας μαθητή |
+| GET | `/s/{token}/qr.png` | QR image |
+
+---
+
+## Ασφάλεια
+
+- Όλα τα tokens υπογράφονται με HMAC-SHA256 (`TOKEN_SECRET`)
+- Τα QR codes λήγουν σε **70 δευτερόλεπτα** (anti-replay)
+- Οι σύνδεσμοι μαθητών λήγουν σε **8 ώρες**
+- Session cookies: `httponly`, `samesite=lax`, `secure` (σε production)
+- Τα PII δεδομένων αποθηκεύονται **μόνο εντός** της ελεγχόμενης υποδομής
+- Κάθε παρουσία καταγράφεται με αμετάβλητο attestation hash
+
+---
+
+## Δομή Project
+
+```
+thronos-edupresence/
+├── app/
+│   ├── main.py          # FastAPI routes & middleware
+│   ├── config.py        # Pydantic settings (env vars)
+│   ├── models.py        # SQLAlchemy ORM models
+│   ├── db.py            # Database session
+│   ├── security.py      # JWT signing, QR generation
+│   ├── attestation.py   # Thronos Chain integration
+│   ├── seed.py          # Demo data seeding
+│   ├── sms.py           # SMS/notification dispatcher
+│   ├── viber.py         # Viber Business Messages API
+│   ├── email_service.py # SMTP email notifications
+│   ├── templates/       # Jinja2 HTML templates
+│   └── static/          # CSS, JS, assets
+├── data/                # SQLite database (Railway Volume)
+├── Dockerfile
+├── railway.toml
+├── requirements.txt
+└── .env.example
 ```
 
-The callback is scaffolded. The actual token exchange/userinfo validation must be completed once the provider contract is known.
+---
 
-## Upgrade note
+## Τεχνολογίες
 
-v4 uses a new local SQLite file: `data/edupresence_v4.db`, so it will not collide with older v1-v3 demo databases.
+| Layer | Τεχνολογία |
+|---|---|
+| Backend | Python 3.12, FastAPI, uvicorn |
+| ORM | SQLAlchemy 2.0 |
+| Database | SQLite (dev) / PostgreSQL (prod) |
+| Templates | Jinja2 |
+| Notifications | Viber Business API, Twilio, SMTP |
+| Containerization | Docker |
+| Hosting | Railway |
+| Security | HMAC-SHA256, QR codes, Attestation |
+
+---
+
+## Υπουργείο Οικογένειας — Πρόγραμμα Ψηφιακής Ενδυνάμωσης
+
+Αναπτύχθηκε για την υποστήριξη συγχρηματοδοτούμενων προγραμμάτων εκπαίδευσης
+Τρίτης Ηλικίας και Κυβερνοασφάλειας, με έμφαση στη διαφάνεια και την ελεγξιμότητα
+παρουσιών σύμφωνα με τις απαιτήσεις του ΕΣΠΑ.

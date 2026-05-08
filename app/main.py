@@ -6,6 +6,7 @@ from typing import Annotated
 from urllib.parse import urlencode
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -31,6 +32,16 @@ from app.seed import seed_demo
 from app.sms import send_sms
 
 app = FastAPI(title=settings.app_name)
+
+# CORS middleware - required for Flutter app and external API clients
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins_list,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
+
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
@@ -143,7 +154,6 @@ def login_page(request: Request):
 
 @app.get("/auth/gov/start")
 def auth_gov_start():
-    # Mock mode: immediate demo login. Real gov mode: redirect to configured OAuth/OIDC endpoint.
     if settings.auth_provider != "gov" or not settings.gov_oauth_authorize_url or not settings.gov_oauth_client_id:
         user = {
             "tax_id": settings.mock_user_tax_id,
@@ -152,7 +162,7 @@ def auth_gov_start():
             "provider": "mock_taxisnet",
         }
         resp = RedirectResponse("/", status_code=303)
-        resp.set_cookie(settings.session_cookie_name, build_session(user), httponly=True, samesite="lax")
+        resp.set_cookie(settings.session_cookie_name, build_session(user), httponly=True, samesite="lax", secure=settings.environment == "production")
         return resp
 
     params = {
@@ -166,8 +176,6 @@ def auth_gov_start():
 
 @app.get("/auth/gov/callback")
 def auth_gov_callback(code: str = "", state: str = ""):
-    # Placeholder for real gov.gr/TaxisNet exchange. Until env vars and provider contract exist,
-    # keep callback safe and mock a verified user.
     if state:
         try:
             verify_token(state, expected_type="gov_state")
@@ -180,7 +188,7 @@ def auth_gov_callback(code: str = "", state: str = ""):
         "provider": "gov_callback_mock" if not code else "gov_pending_exchange",
     }
     resp = RedirectResponse("/", status_code=303)
-    resp.set_cookie(settings.session_cookie_name, build_session(user), httponly=True, samesite="lax")
+    resp.set_cookie(settings.session_cookie_name, build_session(user), httponly=True, samesite="lax", secure=settings.environment == "production")
     return resp
 
 @app.get("/logout")

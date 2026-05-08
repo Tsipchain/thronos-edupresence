@@ -1,7 +1,21 @@
-.venv/
-__pycache__/
-*.pyc
+# Environment secrets - NEVER commit real .env
 .env
-/data/*.db
-/data/*.sqlite
+!.env.example
+
+__pycache__/
+*.py[cod]
+*.pyo
 .pytest_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# Local SQLite database
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
+# OS
+.DS_Store
+Thumbs.db

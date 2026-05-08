@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import requests
 from app.config import settings
 
+
 @dataclass
 class SmsResult:
     ok: bool
@@ -13,7 +14,6 @@ class SmsResult:
 
 
 def normalize_phone(phone: str) -> str:
-    """Keep this simple for MVP. Accept +30..., 69..., 0030..."""
     p = (phone or "").strip().replace(" ", "").replace("-", "")
     if not p:
         return ""
@@ -34,6 +34,11 @@ def send_sms(to_phone: str, body: str) -> SmsResult:
     if provider in {"", "mock", "console", "dry_run"} or settings.sms_dry_run:
         print(f"[SMS MOCK] to={to} body={body}")
         return SmsResult(True, "mock", "mock_sent", body)
+
+    if provider == "viber":
+        from app.viber import send_viber_message
+        ok, resp = send_viber_message(to, body)
+        return SmsResult(ok, "viber", "sent" if ok else "failed", resp)
 
     if provider == "twilio":
         if not settings.twilio_account_sid or not settings.twilio_auth_token or not settings.twilio_from_number:
