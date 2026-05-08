@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ classroom.name }} — Admin ThrEDU</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#127979;</text></svg>">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',sans-serif;background:#0f172a;color:#f1f5f9;min-height:100vh;padding:24px 16px}
+  .container{max-width:900px;margin:0 auto}
+  header{display:flex;align-items:center;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+  header h1{font-size:1.4rem;color:#f8fafc;flex:1}
+  .back{color:#6366f1;text-decoration:none;font-size:.9rem}
+  .back:hover{text-decoration:underline}
+  .alert{padding:14px 18px;border-radius:10px;margin-bottom:20px;font-size:.9rem;font-weight:600}
+  .alert-green{background:#052e16;border:1px solid #16a34a;color:#86efac}
+  .alert-red{background:#450a0a;border:1px solid #dc2626;color:#fca5a5}
+  .alert-blue{background:#0c1a3a;border:1px solid #3b82f6;color:#93c5fd}
+  .section{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:24px;margin-bottom:24px}
+  .section h2{font-size:1rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;font-weight:700}
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;color:#64748b;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;padding:8px 12px;border-bottom:1px solid #334155}
+  td{padding:10px 12px;border-bottom:1px solid #1e293b;vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  .name{color:#f8fafc;font-weight:600}
+  .ref{color:#64748b;font-size:.8rem}
+  input[type=tel]{background:#0f172a;border:1px solid #475569;border-radius:6px;color:#f1f5f9;padding:8px 10px;font-size:.9rem;width:180px;outline:none;transition:.2s}
+  input[type=tel]:focus{border-color:#6366f1;box-shadow:0 0 0 2px rgba(99,102,241,.2)}
+  input[type=tel].has-phone{border-color:#22c55e}
+  .actions{display:flex;gap:12px;flex-wrap:wrap}
+  .btn{padding:12px 20px;border:none;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.2s;text-decoration:none;display:inline-block;text-align:center}
+  .btn-primary{background:#6366f1;color:#fff}
+  .btn-primary:hover{background:#4f46e5}
+  .btn-green{background:#16a34a;color:#fff}
+  .btn-green:hover{background:#15803d}
+  .btn-outline{background:transparent;color:#94a3b8;border:1px solid #475569}
+  .btn-outline:hover{border-color:#6366f1;color:#a5b4fc}
+  textarea{width:100%;background:#0f172a;border:1px solid #475569;border-radius:8px;color:#f1f5f9;padding:10px 14px;font-size:.9rem;resize:vertical;outline:none;min-height:80px;font-family:inherit}
+  textarea:focus{border-color:#6366f1;box-shadow:0 0 0 2px rgba(99,102,241,.2)}
+  .hint{color:#64748b;font-size:.8rem;margin-top:6px}
+  .no-phone{color:#ef4444;font-size:.8rem}
+  .phone-ok{color:#22c55e;font-size:.8rem}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>&#128100; {{ classroom.name }}</h1>
+    <a href="/admin?key={{ key }}" class="back">&#8592; Πίσω</a>
+  </header>
+
+  {% if saved %}
+  <div class="alert alert-green">&#10003; Αποθηκεύτηκαν {{ saved }} τηλέφωνα επιτυχώς.</div>
+  {% endif %}
+
+  {% if sms_sent or sms_failed %}
+  <div class="alert {{ 'alert-green' if sms_sent and not sms_failed else 'alert-blue' }}">
+    &#128241; SMS εστάλησαν: <strong>{{ sms_sent }}</strong>
+    {% if sms_failed %} — Αποτυχία: <strong>{{ sms_failed }}</strong>{% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Phone Numbers -->
+  <form method="POST" action="/admin/class/{{ classroom.id }}/update-phones">
+    <input type="hidden" name="key" value="{{ key }}">
+    <div class="section">
+      <h2>&#128222; Τηλέφωνα Μαθητών</h2>
+      {% if enrollments %}
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Ονοματεπώνυμο</th>
+            <th>Κωδικός</th>
+            <th>Τηλέφωνο</th>
+            <th>Κατάσταση</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for enr in enrollments %}
+          <tr>
+            <td style="color:#475569">{{ loop.index }}</td>
+            <td class="name">{{ enr.student.full_name }}</td>
+            <td class="ref">{{ enr.student.external_ref or '—' }}</td>
+            <td>
+              <input type="tel" name="phone_{{ enr.student.id }}"
+                     value="{{ enr.student.phone or '' }}"
+                     placeholder="+306901234567"
+                     class="{% if enr.student.phone %}has-phone{% endif %}">
+            </td>
+            <td>
+              {% if enr.student.phone %}
+              <span class="phone-ok">&#10003; Έχει</span>
+              {% else %}
+              <span class="no-phone">&#9888; Δεν έχει</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div style="margin-top:16px">
+        <button type="submit" class="btn btn-primary">&#128190; Αποθήκευση Τηλεφώνων</button>
+      </div>
+      {% else %}
+      <p style="color:#64748b">Δεν υπάρχουν εγγεγραμμένοι μαθητές σε αυτό το τμήμα.</p>
+      {% endif %}
+    </div>
+  </form>
+
+  <!-- Bulk SMS -->
+  {% if enrollments %}
+  <form method="POST" action="/admin/class/{{ classroom.id }}/send-sms">
+    <input type="hidden" name="key" value="{{ key }}">
+    <div class="section">
+      <h2>&#128141; Μαζική Αποστολή SMS</h2>
+      <label style="color:#94a3b8;font-size:.85rem;display:block;margin-bottom:6px;font-weight:600">Μήνυμα</label>
+      <textarea name="message_template">Γεια {name}! Παρακολουθήστε την παρουσία σας στο ThrEDU: {url}</textarea>
+      <p class="hint">Χρησιμοποιήστε <code style="color:#a5b4fc">{name}</code> για το όνομα και <code style="color:#a5b4fc">{url}</code> για τον σύνδεσμο παρουσίας.</p>
+      <div class="actions" style="margin-top:16px">
+        <button type="submit" class="btn btn-green"
+          onclick="return confirm('Αποστολή SMS σε {{ enrollments|length }} μαθητές;')">
+          &#9992; Αποστολή SMS σε {{ enrollments|length }} μαθητές
+        </button>
+        <a href="/classes/{{ classroom.id }}/attendance-dashboard" target="_blank" class="btn btn-outline">
+          &#128202; Dashboard Παρουσίας
+        </a>
+      </div>
+    </div>
+  </form>
+  {% endif %}
+</div>
+</body>
+</html>

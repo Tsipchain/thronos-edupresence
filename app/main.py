@@ -23,9 +23,11 @@ from app.security import hash_identity, qr_png_bytes, sign_payload, verify_token
 from app.seed import seed_demo
 from app.sms import send_sms
 from app.admin_import import router as admin_router
+from app.admin_ui import router as admin_ui_router
 
 app = FastAPI(title=settings.app_name)
 app.include_router(admin_router)
+app.include_router(admin_ui_router)
 
 app.add_middleware(
     CORSMiddleware,
