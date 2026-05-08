@@ -1,73 +1,104 @@
-from __future__ import annotations
-
+import logging
 from dataclasses import dataclass
-import requests
 from app.config import settings
 
+logger = logging.getLogger(__name__)
 
 @dataclass
-class SmsResult:
+class SMSResult:
     ok: bool
-    provider: str
     status: str
-    response: str = ""
+    provider: str
+    response: str
 
-
-def normalize_phone(phone: str) -> str:
-    p = (phone or "").strip().replace(" ", "").replace("-", "")
-    if not p:
-        return ""
-    if p.startswith("0030"):
-        return "+30" + p[4:]
-    if p.startswith("69") and len(p) == 10:
-        return "+30" + p
-    return p
-
-
-def send_sms(to_phone: str, body: str) -> SmsResult:
-    to = normalize_phone(to_phone)
-    provider = settings.sms_provider.lower().strip()
-
-    if not to:
-        return SmsResult(False, provider, "no_phone", "No phone number")
-
-    if provider in {"", "mock", "console", "dry_run"} or settings.sms_dry_run:
-        print(f"[SMS MOCK] to={to} body={body}")
-        return SmsResult(True, "mock", "mock_sent", body)
-
+def send_sms(to_phone: str, body: str) -> SMSResult:
+    """Route to configured SMS provider: viber | telesign | mock."""
+    provider = settings.sms_provider.strip().lower()
+    
     if provider == "viber":
-        from app.viber import send_viber_message
-        ok, resp = send_viber_message(to, body)
-        return SmsResult(ok, "viber", "sent" if ok else "failed", resp)
+        return send_viber(to_phone, body)
+    elif provider == "telesign":
+        return send_telesign(to_phone, body)
+    else:  # mock
+        return send_mock(to_phone, body)
 
-    if provider == "twilio":
-        if not settings.twilio_account_sid or not settings.twilio_auth_token or not settings.twilio_from_number:
-            return SmsResult(False, "twilio", "missing_config", "Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER")
-        url = f"https://api.twilio.com/2010-04-01/Accounts/{settings.twilio_account_sid}/Messages.json"
-        try:
-            resp = requests.post(
-                url,
-                data={"To": to, "From": settings.twilio_from_number, "Body": body},
-                auth=(settings.twilio_account_sid, settings.twilio_auth_token),
-                timeout=15,
+def send_viber(to_phone: str, body: str) -> SMSResult:
+    """Viber Business Messages API."""
+    from app.viber import send_viber_message
+    ok, response = send_viber_message(to_phone, body)
+    return SMSResult(
+        ok=ok,
+        status="sent" if ok else "failed",
+        provider="viber",
+        response=response,
+    )
+
+def send_telesign(to_phone: str, body: str) -> SMSResult:
+    """Telesign SMS API."""
+    import base64
+    import urllib.request
+    import json
+    
+    if not settings.telesign_customer_id or not settings.telesign_api_key:
+        return SMSResult(
+            ok=False,
+            status="not_configured",
+            provider="telesign",
+            response="Telesign credentials not set",
+        )
+    
+    # Normalize phone to E.164
+    phone = to_phone.strip()
+    if not phone.startswith("+"):
+        phone = f"+{phone.lstrip('0')}"
+    if len(phone) < 10:
+        phone = "+30" + phone[-9:]  # Greece
+    
+    url = "https://rest-api.telesign.com/v1/messaging"
+    auth = base64.b64encode(
+        f"{settings.telesign_customer_id}:{settings.telesign_api_key}".encode()
+    ).decode()
+    
+    payload = {
+        "phone_number": phone,
+        "message": body,
+        "message_type": "ARN",  # Alert/Notification
+    }
+    
+    try:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode(),
+            headers={
+                "Authorization": f"Basic {auth}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            resp = json.loads(r.read())
+            ok = resp.get("status", {}).get("code") == 0
+            return SMSResult(
+                ok=ok,
+                status="sent" if ok else "failed",
+                provider="telesign",
+                response=json.dumps(resp),
             )
-            ok = 200 <= resp.status_code < 300
-            return SmsResult(ok, "twilio", "sent" if ok else "failed", resp.text[:1000])
-        except Exception as exc:
-            return SmsResult(False, "twilio", "error", str(exc))
+    except Exception as exc:
+        logger.error(f"Telesign SMS failed: {exc}")
+        return SMSResult(
+            ok=False,
+            status="error",
+            provider="telesign",
+            response=str(exc),
+        )
 
-    if provider == "http_get":
-        if not settings.generic_sms_url:
-            return SmsResult(False, "http_get", "missing_config", "Set GENERIC_SMS_URL")
-        try:
-            resp = requests.get(
-                settings.generic_sms_url,
-                params={"to": to, "text": body, "token": settings.generic_sms_token},
-                timeout=15,
-            )
-            ok = 200 <= resp.status_code < 300
-            return SmsResult(ok, "http_get", "sent" if ok else "failed", resp.text[:1000])
-        except Exception as exc:
-            return SmsResult(False, "http_get", "error", str(exc))
-
-    return SmsResult(False, provider, "unknown_provider", f"Unknown SMS_PROVIDER={provider}")
+def send_mock(to_phone: str, body: str) -> SMSResult:
+    """Mock SMS (testing)."""
+    logger.info(f"[MOCK SMS] To: {to_phone} | Body: {body[:80]}...")
+    return SMSResult(
+        ok=True,
+        status="sent",
+        provider="mock",
+        response=f"Mock SMS logged to {to_phone}",
+    )

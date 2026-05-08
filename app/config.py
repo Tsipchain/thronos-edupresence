@@ -1,72 +1,64 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings
+from functools import cached_property
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
-
     app_name: str = "Thronos EduPresence"
     environment: str = "development"
+    
     database_url: str = "sqlite:////data/edupresence_v4.db"
     public_base_url: str = "http://localhost:8000"
-    token_secret: str = "change-me-use-a-long-random-secret"
-    token_issuer: str = "thronos-edupresence"
+    
+    auth_provider: str = "mock"  # mock | gov
+    auth_required: bool = False
+    gov_oauth_authorize_url: str = ""
+    gov_oauth_client_id: str = ""
+    gov_oauth_redirect_uri: str = ""
+    
+    mock_user_tax_id: str = "123456789"
+    mock_user_full_name: str = "Teacher Demo"
+    mock_user_role: str = "teacher"
+    
+    session_ttl_hours: int = 24
+    session_cookie_name: str = "thronos_session"
+    
     qr_ttl_seconds: int = 70
     student_link_ttl_hours: int = 8
-    thronos_attest_url: str = ""
-    thronos_attest_api_key: str = ""
     auto_seed_demo: bool = True
-
-    # CORS — comma-separated origins for Flutter/mobile clients
-    cors_origins: str = "http://localhost:3000,http://localhost:8080"
-
-    # Authentication
-    auth_required: bool = False
-    auth_provider: str = "mock"  # mock | gov
-    session_cookie_name: str = "thronos_edu_session"
-    session_ttl_hours: int = 12
-    mock_user_full_name: str = "ΓΙΩΡΓΟΣ ΔΗΜΟΠΟΥΛΟΣ"
-    mock_user_tax_id: str = "000000000"
-    mock_user_role: str = "teacher"
-    gov_oauth_authorize_url: str = ""
-    gov_oauth_token_url: str = ""
-    gov_oauth_userinfo_url: str = ""
-    gov_oauth_client_id: str = ""
-    gov_oauth_client_secret: str = ""
-    gov_oauth_redirect_uri: str = ""
-
-    # SMS / notifications
-    sms_provider: str = "mock"  # mock | twilio | http_get | viber
-    sms_dry_run: bool = False
-    twilio_account_sid: str = ""
-    twilio_auth_token: str = ""
-    twilio_from_number: str = ""
-    generic_sms_url: str = ""
-    generic_sms_token: str = ""
-
-    # Viber Business Messages
+    
+    cors_origins: str = "http://localhost:3000,http://localhost:8081,http://localhost:19006,http://localhost:19007,exp://localhost:8081"
+    
+    # SMS Providers: viber | telesign | mock
+    sms_provider: str = "mock"
+    
+    # Viber Bot API
     viber_bot_token: str = ""
-    viber_sender_name: str = "ThrEDuPresence"
-    viber_min_api_version: int = 1
-
-    # SMTP email
+    viber_sender_name: str = "ThrEDU"
+    
+    # Telesign SMS API
+    telesign_customer_id: str = ""
+    telesign_api_key: str = ""
+    telesign_phone_number: str = "+1234567890"  # Your Telesign virtual number
+    
+    # SMTP Email
     smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 587
-    smtp_use_tls: bool = True
-    smtp_username: str = ""
+    smtp_user: str = ""
     smtp_password: str = ""
-    smtp_from_email: str = "noreply@thronoschain.org"
-    smtp_from_name: str = "Thronos EduPresence"
-
-    # ==========================================================================
-    # Thronos Chain L2E Integration (Learn-to-Earn / University Systems)
-    # ==========================================================================
-    l2e_enabled: bool = False                              # Αναφαιρείτε σε production
-    l2e_base_url: str = "https://api.thronoschain.org"    # Main chain URL
-    l2e_api_key: str = ""                                  # APP_AI_KEY του main chain
-    l2e_tenant_id: str = "ministry_edu"                   # Tenant identifier
-    l2e_attendance_threshold_pct: int = 80                # % παρουσίας για reward eligibility
-
+    smtp_from: str = "noreply@thronoschain.org"
+    
+    # L2E Integration (main chain)
+    l2e_enabled: bool = False
+    l2e_base_url: str = "https://api.thronoschain.org"
+    l2e_api_key: str = ""
+    l2e_tenant_id: str = "ministry_edu"
+    l2e_attendance_threshold_pct: int = 80
+    
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+    
+    class Config:
+        env_file = ".env"
+        case_sensitive = False
 
 settings = Settings()
