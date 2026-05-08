@@ -8,50 +8,165 @@
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Segoe UI',sans-serif;background:#0f172a;color:#f1f5f9;min-height:100vh;padding:32px 16px}
-  .container{max-width:900px;margin:0 auto}
-  header{display:flex;align-items:center;gap:12px;margin-bottom:32px}
-  header h1{font-size:1.6rem;color:#f8fafc}
-  header span{font-size:1.8rem}
-  .badge{background:#1e3a5f;color:#7dd3fc;padding:4px 12px;border-radius:20px;font-size:.75rem;font-weight:700;margin-left:auto}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
-  .card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:20px;text-decoration:none;display:block;transition:.2s}
-  .card:hover{border-color:#6366f1;box-shadow:0 0 0 2px rgba(99,102,241,.3)}
-  .card h2{color:#f8fafc;font-size:1.1rem;margin-bottom:4px}
-  .card p{color:#64748b;font-size:.85rem}
-  .card .meta{margin-top:12px;font-size:.8rem;color:#94a3b8;display:flex;gap:12px}
-  .card .meta span{background:#0f172a;padding:4px 8px;border-radius:6px}
-  .empty{text-align:center;color:#475569;padding:60px;background:#1e293b;border-radius:12px}
+  .container{max-width:1000px;margin:0 auto}
+  header{display:flex;align-items:center;gap:12px;margin-bottom:28px;flex-wrap:wrap}
+  header h1{font-size:1.5rem;color:#f8fafc;flex:1}
+  .badge{background:#1e3a5f;color:#7dd3fc;padding:4px 12px;border-radius:20px;font-size:.75rem;font-weight:700}
+  .tabs{display:flex;gap:8px;margin-bottom:24px;border-bottom:1px solid #334155;padding-bottom:0}
+  .tab{padding:10px 20px;color:#64748b;cursor:pointer;border-radius:8px 8px 0 0;font-size:.9rem;font-weight:600;border:1px solid transparent;border-bottom:none;text-decoration:none}
+  .tab.active{background:#1e293b;color:#f8fafc;border-color:#334155}
+  .tab:hover:not(.active){color:#94a3b8}
+  .panel{display:none}.panel.active{display:block}
+  .section{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:24px;margin-bottom:20px}
+  .section h2{font-size:.9rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;font-weight:700}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:640px){.grid2{grid-template-columns:1fr}}
+  label{display:block;color:#94a3b8;font-size:.8rem;font-weight:600;margin-bottom:5px;margin-top:12px}
+  label:first-child{margin-top:0}
+  input,select{width:100%;padding:10px 12px;background:#0f172a;border:1px solid #475569;border-radius:7px;color:#f1f5f9;font-size:.9rem;outline:none;transition:.2s}
+  input:focus,select:focus{border-color:#6366f1;box-shadow:0 0 0 2px rgba(99,102,241,.2)}
+  .btn{padding:11px 20px;border:none;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.2s;text-decoration:none;display:inline-block}
+  .btn-primary{background:#6366f1;color:#fff}
+  .btn-primary:hover{background:#4f46e5}
+  .btn-green{background:#16a34a;color:#fff}
+  .btn-green:hover{background:#15803d}
+  .btn-sm{padding:7px 14px;font-size:.8rem}
+  .alert{padding:12px 16px;border-radius:8px;font-size:.85rem;margin-bottom:16px;font-weight:600}
+  .alert-green{background:#052e16;border:1px solid #16a34a;color:#86efac}
+  .alert-yellow{background:#1c1400;border:1px solid #ca8a04;color:#fde047}
+  .node-card{background:#0f172a;border:1px solid #334155;border-radius:10px;padding:16px;margin-bottom:12px}
+  .node-card h3{color:#f8fafc;font-size:1rem;margin-bottom:4px}
+  .node-card p{color:#64748b;font-size:.82rem;margin-bottom:8px}
+  .cls-list{display:flex;flex-wrap:wrap;gap:8px}
+  .cls-chip{background:#1e293b;border:1px solid #334155;color:#a5b4fc;padding:5px 12px;border-radius:20px;font-size:.8rem;text-decoration:none;transition:.2s}
+  .cls-chip:hover{border-color:#6366f1;background:#312e81}
+  .import-btn{background:#0e7490;color:#fff;padding:5px 12px;border-radius:20px;font-size:.8rem;text-decoration:none;margin-left:auto;font-weight:600}
+  .import-btn:hover{background:#0891b2}
+  .node-header{display:flex;align-items:center;gap:8px;margin-bottom:6px}
 </style>
+<script>
+function showTab(id){
+  document.querySelectorAll('.tab,.panel').forEach(e=>e.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  document.getElementById('panel-'+id).classList.add('active');
+}
+</script>
 </head>
 <body>
 <div class="container">
   <header>
-    <span>&#127979;</span>
+    <span style="font-size:1.8rem">&#127979;</span>
     <h1>ThrEDU Admin Panel</h1>
     <div class="badge">&#128274; Admin</div>
   </header>
 
-  <p style="color:#94a3b8;margin-bottom:24px">Επιλέξτε τμήμα για διαχείριση τηλεφώνων και αποστολή SMS στους μαθητές.</p>
-
-  {% if classrooms %}
-  <div class="grid">
-    {% for cls in classrooms %}
-    <a href="/admin/class/{{ cls.id }}?key={{ key }}" class="card">
-      <h2>{{ cls.name }}</h2>
-      <p>{{ cls.teacher_name or 'Εκπαιδευτικός' }}</p>
-      <div class="meta">
-        <span>&#128100; {{ cls.enrollments|selectattr('status','eq','active')|list|length }} μαθητές</span>
-        {% if cls.node %}<span>&#128205; {{ cls.node.name }}</span>{% endif %}
-      </div>
-    </a>
-    {% endfor %}
-  </div>
-  {% else %}
-  <div class="empty">
-    <p style="font-size:2rem;margin-bottom:12px">&#128203;</p>
-    <p>Δεν υπάρχουν τμήματα ακόμα.</p>
-  </div>
+  {% if msg %}
+  <div class="alert alert-green">&#10003; {{ msg }}</div>
   {% endif %}
+
+  <div class="tabs">
+    <a id="tab-nodes" class="tab active" onclick="showTab('nodes');return false" href="#">&#127970; Κόμβοι &amp; Τμήματα</a>
+    <a id="tab-import" class="tab" onclick="showTab('import');return false" href="#">&#128196; Εισαγωγή CSV/Excel</a>
+    <a id="tab-newnode" class="tab" onclick="showTab('newnode');return false" href="#">&#43; Νέος Κόμβος</a>
+  </div>
+
+  <!-- Tab: Nodes & Classes -->
+  <div id="panel-nodes" class="panel active">
+    {% if nodes %}
+      {% for node in nodes %}
+      <div class="node-card">
+        <div class="node-header">
+          <h3>&#127970; {{ node.name }}</h3>
+          <span style="color:#64748b;font-size:.8rem">{{ node.municipality }}</span>
+        </div>
+        <p>{{ node.classrooms|length }} τμήματα</p>
+        <div class="cls-list">
+          {% for cls in node.classrooms %}
+          <a href="/admin/class/{{ cls.id }}?key={{ key }}" class="cls-chip">
+            {{ cls.name }}
+            <span style="color:#64748b">({{ cls.enrollments|selectattr('status','eq','active')|list|length }} μ.)</span>
+          </a>
+          {% endfor %}
+          <a href="#" onclick="showTab('import');document.getElementById('sel-node').value='{{ node.id }}';return false" class="import-btn">+ Εισαγωγή CSV</a>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+    <div style="text-align:center;color:#475569;padding:40px">Δεν υπάρχουν κόμβοι ακόμα.</div>
+    {% endif %}
+  </div>
+
+  <!-- Tab: CSV/Excel Import -->
+  <div id="panel-import" class="panel">
+    <div class="section">
+      <h2>&#128196; Εισαγωγή Μαθητών από CSV / Excel</h2>
+      <form method="POST" action="/admin/import/upload" enctype="multipart/form-data">
+        <input type="hidden" name="key" value="{{ key }}">
+        <div class="grid2">
+          <div>
+            <label>Κόμβος (&#x2193; επιλέξτε υπάρχοντα ή γράψτε νέο)</label>
+            <select name="node_id" id="sel-node">
+              <option value="">— Νέος κόμβος —</option>
+              {% for n in nodes %}
+              <option value="{{ n.id }}">{{ n.name }}</option>
+              {% endfor %}
+            </select>
+            <label>ή Εισαγάγετε νέο όνομα κόμβου</label>
+            <input type="text" name="new_node_name" placeholder="π.χ. 2ο ΚΑΠΗ Δήμου">
+            <label>Δήμος / Φορέας</label>
+            <input type="text" name="municipality" value="ΘΕΣΣΑΛΟΝΙΚΗΣ">
+          </div>
+          <div>
+            <label>Όνομα Τμήματος</label>
+            <input type="text" name="classroom_name" placeholder="π.χ. Τμήμα Α" required>
+            <label>Ονοματεπώνυμο Εκπαιδευτικού</label>
+            <input type="text" name="teacher_name" placeholder="π.χ. Ιωάννα Παπαδοπούλου">
+            <label>Τηλ. Εκπαιδευτικού</label>
+            <input type="tel" name="teacher_phone" placeholder="+306901234567">
+            <label>Στόχος Ωρών Διδασκαλίας</label>
+            <input type="number" name="target_hours" value="40" min="1" max="200">
+          </div>
+        </div>
+
+        <label style="margin-top:20px">Αρχείο CSV ή Excel (.csv, .xlsx)</label>
+        <input type="file" name="file" accept=".csv,.xlsx,.xls" required style="padding:8px">
+
+        <div style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:14px;margin-top:14px;font-size:.82rem;color:#94a3b8">
+          <strong style="color:#f8fafc">Αναμενόμενες στήλες:</strong><br>
+          <code style="color:#a5b4fc">full_name</code> (ή ονοματεπώνυμο) &nbsp;•&nbsp;
+          <code style="color:#a5b4fc">phone</code> (ή τηλέφωνο) &nbsp;•&nbsp;
+          <code style="color:#a5b4fc">external_ref</code> (πραιρετικό) &nbsp;•&nbsp;
+          <code style="color:#a5b4fc">gender</code> (πραιρετικό)
+        </div>
+
+        <div style="margin-top:16px">
+          <button type="submit" class="btn btn-green">&#8679; Εισαγωγή Αρχείου</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Tab: New Node -->
+  <div id="panel-newnode" class="panel">
+    <div class="section">
+      <h2>&#127970; Δημιουργία Νέου Κόμβου</h2>
+      <form method="POST" action="/admin/nodes/create">
+        <input type="hidden" name="key" value="{{ key }}">
+        <label>Όνομα Κόμβου</label>
+        <input type="text" name="name" placeholder="π.χ. 2ο ΚΑΠΗ Δήμου Θεσσαλονίκης" required>
+        <label>Δήμος / Φορέας</label>
+        <input type="text" name="municipality" value="ΘΕΣΣΑΛΟΝΙΚΗΣ">
+        <label>Διοικητικός Υπεύθυνος</label>
+        <input type="text" name="responsible_name" placeholder="π.χ. Μαρία Γεωργίου">
+        <label>Μέγιστη Χωρητικότητα</label>
+        <input type="number" name="capacity" value="15" min="1" max="100">
+        <div style="margin-top:16px">
+          <button type="submit" class="btn btn-primary">&#43; Δημιουργία Κόμβου</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
 </div>
 </body>
 </html>
