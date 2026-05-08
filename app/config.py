@@ -5,7 +5,7 @@ class Settings(BaseSettings):
 
     app_name: str = "Thronos EduPresence"
     environment: str = "development"
-    database_url: str = "sqlite:///./data/edupresence_v4.db"
+    database_url: str = "sqlite:////data/edupresence_v4.db"
     public_base_url: str = "http://localhost:8000"
     token_secret: str = "change-me-use-a-long-random-secret"
     token_issuer: str = "thronos-edupresence"
