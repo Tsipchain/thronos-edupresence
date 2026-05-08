@@ -413,7 +413,7 @@ def create_classroom_legacy(db: Annotated[Session, Depends(get_db)],
 
 
 # ---------------------------------------------------------------------------
-# Classroom detail + L2E manual trigger
+# Classroom detail + attendance dashboard + L2E manual trigger
 # ---------------------------------------------------------------------------
 
 @app.get("/classes/{class_id}", response_class=HTMLResponse)
@@ -441,6 +441,77 @@ def class_detail(request: Request, class_id: int, db: Annotated[Session, Depends
         "hours_done": teaching_hours_done(classroom),
         "completion_pct": completion_percent(classroom),
     })
+
+
+@app.get("/classes/{class_id}/attendance-dashboard", response_class=HTMLResponse)
+def attendance_dashboard(request: Request, class_id: int, db: Annotated[Session, Depends(get_db)]):
+    """Full attendance matrix: students × lessons with %, L2E certificate status."""
+    classroom = db.query(Classroom).options(
+        joinedload(Classroom.node),
+        joinedload(Classroom.lessons),
+        joinedload(Classroom.enrollments).joinedload(Enrollment.student),
+    ).filter(Classroom.id == class_id).first()
+    if not classroom:
+        raise HTTPException(404, "Classroom not found")
+
+    lessons = sorted(classroom.lessons, key=lambda l: l.starts_at)
+    closed_lessons = [l for l in lessons if l.status == "closed"]
+    enrollments = [e for e in classroom.enrollments if e.status == "active"]
+
+    # Load all attendances for this classroom in one query
+    lesson_ids = [l.id for l in lessons]
+    all_att = (
+        db.query(Attendance)
+        .options(joinedload(Attendance.makeup))
+        .filter(Attendance.lesson_id.in_(lesson_ids))
+        .all() if lesson_ids else []
+    )
+    att_index: dict[tuple[int, int], Attendance] = {
+        (a.lesson_id, a.student_id): a for a in all_att
+    }
+
+    threshold = settings.l2e_attendance_threshold_pct or 80
+    eligible_count = 0
+
+    class StudentRow:
+        def __init__(self, student, by_lesson, present, total, pct, cert_id):
+            self.student = student
+            self.by_lesson = by_lesson
+            self.present = present
+            self.total = total
+            self.pct = pct
+            self.cert_id = cert_id
+
+    rows = []
+    for enr in sorted(enrollments, key=lambda e: e.student.full_name):
+        s = enr.student
+        by_lesson: dict[int, Attendance] = {}
+        present = 0
+        for lesson in closed_lessons:
+            att = att_index.get((lesson.id, s.id))
+            if att:
+                by_lesson[lesson.id] = att
+                if att.status == "present":
+                    present += 1
+        total = len(closed_lessons)
+        pct = round(present / total * 100) if total else 0
+        if pct >= threshold:
+            eligible_count += 1
+
+        # Check if certificate already issued in L2E (from l2e_bridge data)
+        cert_id = getattr(enr, "l2e_cert_id", None) or ""
+
+        rows.append(StudentRow(s, by_lesson, present, total, pct, cert_id))
+
+    return render(request, "attendance_dashboard.html", {
+        "classroom": classroom,
+        "lessons": closed_lessons,
+        "rows": rows,
+        "eligible_count": eligible_count,
+        "hours_done": teaching_hours_done(classroom),
+        "completion_pct": completion_percent(classroom),
+    })
+
 
 @app.post("/classes/{class_id}/enroll")
 def enroll_student(class_id: int, db: Annotated[Session, Depends(get_db)], student_id: int = Form(...)):
@@ -471,7 +542,7 @@ def trigger_l2e_complete(class_id: int, request: Request, db: Annotated[Session,
     db.commit()
     write_audit(db, "l2e_course_complete_reported", "classroom", classroom.id,
                 actor=actor_name(request), detail=result)
-    return JSONResponse({"ok": True, "l2e_result": result})
+    return RedirectResponse(f"/classes/{class_id}/attendance-dashboard?l2e_sent=1", status_code=303)
 
 
 # ---------------------------------------------------------------------------
@@ -643,7 +714,6 @@ def close_lesson(lesson_id: int, request: Request, db: Annotated[Session, Depend
     write_audit(db, "lesson_closed", "lesson", lesson.id, actor=actor_name(request),
                 detail={"rows": len(lesson.attendance_rows)})
 
-    # --- L2E integration: report lesson attendance + check course completion ---
     from app.l2e_bridge import report_lesson_attendance, report_course_completion
     report_lesson_attendance(lesson, db)
 
