@@ -62,6 +62,10 @@ class Settings(BaseSettings):
     l2e_tenant_id: str = "ministry_edu"
     l2e_attendance_threshold_pct: int = 80
 
+    # Thronos attestation chain (optional)
+    thronos_attest_url: str = ""
+    thronos_attest_api_key: str = ""
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
