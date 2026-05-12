@@ -7,7 +7,7 @@ from urllib.parse import urlencode
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session, joinedload
@@ -355,7 +355,7 @@ def approve_unable(request: Request, node_id: int, request_id: int, db: Annotate
 @app.post("/nodes/{node_id}/unable/{request_id}/reject")
 def reject_unable(request: Request, node_id: int, request_id: int, db: Annotated[Session, Depends(get_db)]):
     req = (db.query(UnableRequest).options(joinedload(UnableRequest.student))
-           .filter(UnableRequest.id == request_id, UnableRequest.node_id == node_id).first())    
+           .filter(UnableRequest.id == request_id, UnableRequest.node_id == node_id).first())
     if not req:
         raise HTTPException(404, "Unable request not found")
     req.status = "rejected"; req.decided_by = actor_name(request); req.decided_at = now_utc()
@@ -417,7 +417,7 @@ def create_classroom_legacy(db: Annotated[Session, Depends(get_db)],
 
 
 # ---------------------------------------------------------------------------
-# Classroom detail + attendance dashboard + L2E manual trigger
+# Classroom detail + attendance dashboard + history + L2E
 # ---------------------------------------------------------------------------
 
 @app.get("/classes/{class_id}", response_class=HTMLResponse)
@@ -496,6 +496,46 @@ def attendance_dashboard(request: Request, class_id: int, db: Annotated[Session,
         "eligible_count": eligible_count,
         "hours_done": teaching_hours_done(classroom),
         "completion_pct": completion_percent(classroom),
+    })
+
+
+@app.get("/classes/{class_id}/history", response_class=HTMLResponse)
+def class_history(request: Request, class_id: int, db: Annotated[Session, Depends(get_db)]):
+    classroom = db.query(Classroom).options(
+        joinedload(Classroom.node),
+        joinedload(Classroom.lessons).joinedload(Lesson.attendance_rows),
+    ).filter(Classroom.id == class_id).first()
+    if not classroom:
+        raise HTTPException(404, "Classroom not found")
+
+    class HistoryEntry:
+        def __init__(self, lesson: Lesson):
+            self.lesson = lesson
+            rows = lesson.attendance_rows
+            self.present_count = sum(1 for r in rows if r.status == "present")
+            self.total = len(rows)
+            # Ψηφιακή υπογραφή = μαθητής επιβεβαίωσε μέσω link ή QR scan
+            self.digital_count = sum(
+                1 for r in rows
+                if r.status == "present" and (
+                    r.student_confirmed_at is not None or
+                    r.confirmation_method == "student_qr_teacher_scan"
+                )
+            )
+            self.manual_count = sum(
+                1 for r in rows
+                if r.status == "present" and r.confirmation_method == "teacher_manual"
+            )
+            self.hashes = [r.attestation_hash for r in rows if r.attestation_hash]
+
+    history = [
+        HistoryEntry(lesson)
+        for lesson in sorted(classroom.lessons, key=lambda l: l.starts_at, reverse=True)
+    ]
+
+    return render(request, "lesson_history.html", {
+        "classroom": classroom,
+        "history": history,
     })
 
 
