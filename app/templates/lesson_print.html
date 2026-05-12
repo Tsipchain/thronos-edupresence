@@ -2,42 +2,98 @@
 <html lang="el">
 <head>
   <meta charset="utf-8">
-  <title>Παρουσίες</title>
+  <title>Παρουσίες — {{ lesson.classroom.name }} — {{ lesson.starts_at.strftime('%d/%m/%Y') }}</title>
   <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    .dig-sig { color: #16a34a; font-size: .78rem; font-weight: 700; white-space: nowrap; }
+    .hash-small { font-family: monospace; font-size: .65rem; color: #64748b; display: block; }
+    .sig-line { border-bottom: 1px solid #333; min-width: 90px; display: inline-block; }
+    .legend { font-size: .75rem; margin-top: 18px; color: #374151; border-top: 1px solid #ccc; padding-top: 8px; }
+    .doc-hash { font-family: monospace; font-size: .7rem; background: #f1f5f9; padding: 6px 10px; border-radius: 4px; word-break: break-all; margin-top: 12px; }
+    @media print { .no-print { display: none !important; } }
+  </style>
 </head>
 <body class="print-page gov-print">
-  <button class="no-print print-button" onclick="window.print()">Εκτύπωση</button>
+  <button class="no-print print-button" onclick="window.print()">&#128438; Εκτύπωση</button>
+
   <section class="official-print-head">
     <div>
       <div class="emblem print-emblem">Θ</div>
       <strong>ΕΛΛΗΝΙΚΗ ΔΗΜΟΚΡΑΤΙΑ</strong><br>
       <span>Υπουργείο Κοινωνικής Συνοχής και Οικογένειας</span>
     </div>
-    <div class="right"><strong>Thronos EduPresence</strong><br>hash-only proof</div>
+    <div class="right"><strong>Thronos EduPresence</strong><br>Ψηφιακή Υπογραφή &amp; Attestation</div>
   </section>
-  <h1>Παρουσίες</h1>
-  <p><strong>Κόμβος:</strong> {{ lesson.classroom.node.name if lesson.classroom.node else (lesson.classroom.location or '-') }}</p>
-  <p><strong>Όνομα τμήματος:</strong> {{ lesson.classroom.name }}</p>
-  <p><strong>Εκπαιδευτής:</strong> {{ lesson.classroom.teacher_name or lesson.created_by }}</p>
-  <p><strong>Ημερομηνία:</strong> {{ lesson.starts_at.strftime('%d/%m/%Y %H:%M') }}</p>
-  <p><strong>Κατάσταση:</strong> {{ status_label(lesson.status) }}{% if lesson.closed_at %} · Κλειδώθηκε {{ lesson.closed_at.strftime('%d/%m/%Y %H:%M') }}{% endif %}</p>
+
+  <h1>Κατάσταση Παρουσιών</h1>
+
+  <table class="gov-table slim" style="margin-bottom:12px">
+    <tr><th>Κόμβος</th><td>{{ lesson.classroom.node.name if lesson.classroom.node else (lesson.classroom.location or '-') }}</td>
+        <th>Τμήμα</th><td>{{ lesson.classroom.name }}</td></tr>
+    <tr><th>Εκπαιδευτής</th><td>{{ lesson.classroom.teacher_name or lesson.created_by }}</td>
+        <th>Ημ/νία</th><td>{{ lesson.starts_at.strftime('%d/%m/%Y %H:%M') }}</td></tr>
+    <tr><th>Κατάσταση</th><td>{{ status_label(lesson.status) }}{% if lesson.closed_at %} · Κλείστηκε {{ lesson.closed_at.strftime('%d/%m/%Y %H:%M') }}{% endif %}</td>
+        <th>Διδ. Ώρες</th><td>{{ lesson.teaching_hours }}</td></tr>
+  </table>
+
+  {% set digital_count = rows | selectattr('confirmation_method', 'in', ['student_qr_teacher_scan', 'student_self_confirmed']) | list | length %}
+  {% set present_count = rows | selectattr('status', 'eq', 'present') | list | length %}
 
   <table class="print-table gov-table">
-    <thead><tr><th>#</th><th>Ονοματεπώνυμο</th><th>Κ.Α.Υ.Α.Σ.</th><th>Παρουσία</th><th>Μέθοδος</th><th>Υπογραφή</th></tr></thead>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Ονοματεπώνυμο</th>
+        <th>Κ.Α.Υ.Α.Σ.</th>
+        <th>Παρουσία</th>
+        <th>Μέθοδος Επιβεβαίωσης</th>
+        <th>Υπογραφή</th>
+      </tr>
+    </thead>
     <tbody>
     {% for row in rows %}
+      {% set is_digital = row.student_confirmed_at or row.confirmation_method == 'student_qr_teacher_scan' %}
       <tr>
         <td>{{ loop.index }}</td>
         <td>{{ row.student.full_name }}</td>
         <td>{{ row.student.external_ref or row.student.id }}</td>
         <td>{{ status_label(row.status) }}</td>
         <td>{{ method_label(row.confirmation_method) }}</td>
-        <td></td>
+        <td>
+          {% if is_digital and row.status == 'present' %}
+            <span class="dig-sig">&#10003; Ψηφιακή</span>
+            {% if row.attestation_hash %}
+            <span class="hash-small">#{{ row.attestation_hash[:16] }}…</span>
+            {% endif %}
+          {% elif row.status == 'present' %}
+            <span class="sig-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+          {% else %}
+            <span style="color:#94a3b8;font-size:.8rem">—</span>
+          {% endif %}
+        </td>
       </tr>
     {% endfor %}
     </tbody>
   </table>
-  <p class="notice">Το παρόν αποτυπώνει τη συγκεκριμένη ημερομηνία. Αναπληρώσεις εκδίδονται σε ξεχωριστό έντυπο και δεν μετατρέπουν αναδρομικά την παλιά απουσία σε παρουσία.</p>
+
+  <div class="legend">
+    <strong>Σύνοψη:</strong>
+    Παρόντες: <strong>{{ present_count }}</strong> /
+    Σύνολο: <strong>{{ rows|length }}</strong> —
+    Ψηφιακές υπογραφές: <strong>{{ digital_count }}</strong>
+    <br><br>
+    <em>Ψηφιακή υπογραφή = επιβεβαίωση μαθητή μέσω προσωπικού link SMS ή QR και επιβεβαίωση εκπαιδευτικού στη συσκευή του.  Δεν απαιτείται χειρόγραφη υπογραφή.</em>
+  </div>
+
+  {% set all_hashes = rows | selectattr('attestation_hash') | map(attribute='attestation_hash') | list %}
+  {% if all_hashes %}
+  <div class="doc-hash">
+    <strong>🔒 Attestation Hashes (παρουσιών):</strong><br>
+    {% for h in all_hashes[:5] %}{{ h[:32] }}… {% endfor %}{% if all_hashes|length > 5 %}&hellip;{% endif %}
+  </div>
+  {% endif %}
+
+  <p class="notice">Το παρόν αποτυπώνει τη συγκεκριμένη ημερομηνία. Αναπληρώσεις εκδίδονται σε ξεχωριστό έντυπο.</p>
   <p class="signature right">Υπογραφή Εκπαιδευτή</p>
 </body>
 </html>

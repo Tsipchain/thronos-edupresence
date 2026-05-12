@@ -27,13 +27,14 @@
       <button class="btn primary">+ Προσθήκη</button>
     </form>
   </div>
-  <p class="muted">Όπως στην υπάρχουσα πλατφόρμα: πρώτα δημιουργείς ημέρα/ώρες, μετά δηλώνεις παρόντες. Εδώ προστίθεται SMS link + QR scan.</p>
+  <p class="muted">Πρώτα δημιουργείς ημέρα/ώρες, μετά δηλώνεις παρόντες. SMS link + QR scan.</p>
 </section>
 
 <section class="tabs no-print">
   <a href="#students">ΣΠΟΥΔΑΣΤΕΣ ΕΓΓΕΓΡΑΜΜΕΝΟΙ ΣΤΟ ΤΜΗΜΑ</a>
   <a class="active" href="#lessons">ΠΑΡΟΥΣΙΕΣ</a>
   <a href="#makeups">ΑΝΑΠΛΗΡΩΣΕΙΣ</a>
+  <a href="/classes/{{ classroom.id }}/history" style="margin-left:auto;color:#6366f1;font-size:.85rem;padding:8px 14px">&#128218; Ιστορικό &amp; Ψηφ. Υπογραφές</a>
 </section>
 
 <section id="students" class="block">
@@ -72,7 +73,12 @@
         <td>{{ lesson.teaching_hours }}</td>
         <td>{{ completion_percent(classroom) }}%</td>
         <td>{{ status_label(lesson.status) }}</td>
-        <td class="actions"><a title="Προβολή" href="/lessons/{{ lesson.id }}">👁</a><a title="Επεξεργασία" href="/lessons/{{ lesson.id }}">✎</a>{% if lesson.status != 'open' %}<a title="Εκτύπωση" href="/lessons/{{ lesson.id }}/print">🖨</a>{% endif %}</td>
+        <td class="actions">
+          <a title="Προβολή" href="/lessons/{{ lesson.id }}">👁</a>
+          {% if lesson.status == 'closed' %}
+          <a title="Εκτύπωση" href="/lessons/{{ lesson.id }}/print">🖨</a>
+          {% endif %}
+        </td>
       </tr>
       {% else %}
       <tr><td colspan="6" class="muted">Δεν υπάρχουν παρουσίες ακόμη. Πατήστε + Προσθήκη.</td></tr>
