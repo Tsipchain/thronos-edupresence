@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block breadcrumbs %}
+  <span>›</span><a href="/nodes/{{ classroom.node_id }}">{{ classroom.node.name if classroom.node else classroom.location }}</a>
+  <span>›</span><a href="/classes/{{ classroom.id }}">{{ classroom.name }}</a>
+  <span>›</span><span>Ιστορικό</span>
+{% endblock %}
+{% block content %}
+<a class="back-link no-print" href="/classes/{{ classroom.id }}">&#8592; Πίσω στο τμήμα</a>
+
+<section class="plain-head">
+  <h1>&#128218; Ιστορικό Παρουσιών</h1>
+  <p class="muted">{{ classroom.name }} — {{ classroom.teacher_name or '-' }}</p>
+</section>
+
+<section class="block">
+  <table class="gov-table hist-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Ημ/νία</th>
+        <th>Τίτλος</th>
+        <th>Παρόντες</th>
+        <th>Ψηφιακές Υπογραφές</th>
+        <th>Χειρόγραφες</th>
+        <th>Κλείστηκε</th>
+        <th>Ενέργειες</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for entry in history %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ entry.lesson.starts_at.strftime('%d/%m/%Y %H:%M') }}</td>
+        <td>{{ entry.lesson.title }}</td>
+        <td>
+          <span class="badge badge-green">{{ entry.present_count }} παρόντες</span>
+          <span class="badge badge-gray">{{ entry.total }} σύνολο</span>
+        </td>
+        <td>
+          {% if entry.digital_count %}
+          <span class="dig-count">&#10003; {{ entry.digital_count }}</span>
+          <span style="color:#64748b;font-size:.8rem"> / {{ entry.present_count }}</span>
+          {% else %}
+          <span class="badge badge-gray">—</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if entry.manual_count %}
+          <span class="badge badge-blue">{{ entry.manual_count }}</span>
+          {% else %}
+          <span style="color:#94a3b8">—</span>
+          {% endif %}
+        </td>
+        <td style="font-size:.8rem">
+          {% if entry.lesson.closed_at %}
+          {{ entry.lesson.closed_at.strftime('%d/%m/%Y %H:%M') }}
+          {% else %}
+          <span class="badge" style="background:#fef9c3;color:#854d0e">Ανοιχτό</span>
+          {% endif %}
+        </td>
+        <td class="actions">
+          <a href="/lessons/{{ entry.lesson.id }}" title="Προβολή">&#128065;</a>
+          {% if entry.lesson.status == 'closed' %}
+          <a href="/lessons/{{ entry.lesson.id }}/print" title="Εκτύπωση">&#128438;</a>
+          {% endif %}
+          {% if entry.hashes %}
+          <details style="display:inline">
+            <summary style="cursor:pointer;color:#6366f1;font-size:.75rem">hash</summary>
+            <div style="position:absolute;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:10px;z-index:10;max-width:400px">
+              {% for h in entry.hashes[:3] %}
+              <div class="hash-mono">{{ h[:48] }}…</div>
+              {% endfor %}
+              {% if entry.hashes|length > 3 %}<div class="hash-mono">+{{ entry.hashes|length - 3 }} ακόμα</div>{% endif %}
+            </div>
+          </details>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="8" class="muted">Δεν υπάρχουν κλειστά μαθήματα ακόμα.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="block">
+  <h2 style="margin-bottom:10px">Σύνοψη Αττεστατίων (Blockchain Attestation)</h2>
+  <p class="muted">&#128274; Κάθε κλείσιμο μάθημα καταγράφεται με cryptographic hash στη βάση δεδομένων. Η ψηφιακή υπογραφή είναι νομικά εξισωμένη με την χειρόγραφη μέσω eIDAS.</p>
+  <table class="gov-table" style="font-size:.82rem">
+    <thead><tr><th>Μάθημα</th><th>Σύνολο Hashes</th><th>Ψηφ. Υπογραφές</th></tr></thead>
+    <tbody>
+    {% for entry in history if entry.lesson.status == 'closed' %}
+    <tr>
+      <td>{{ entry.lesson.starts_at.strftime('%d/%m/%Y') }} — {{ entry.lesson.title }}</td>
+      <td>{{ entry.hashes|length }}</td>
+      <td class="dig-count">{{ entry.digital_count }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}
