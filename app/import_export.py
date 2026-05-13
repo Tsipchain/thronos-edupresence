@@ -4,7 +4,7 @@ from __future__ import annotations
 import csv
 import io
 from datetime import datetime
-from typing import list, tuple
+from typing import Tuple
 from sqlalchemy.orm import Session
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
