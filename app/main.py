@@ -17,11 +17,13 @@ from app.config import settings
 from app.db import Base, engine, get_db
 from app.models import (
     Attendance, Classroom, Enrollment, Lesson, Makeup,
-    Node, SmsMessage, Student, UnableRequest, now_utc,
+    Node, SmsMessage, EmailMessage, Student, UnableRequest, now_utc,
 )
 from app.security import hash_identity, qr_png_bytes, sign_payload, verify_token
 from app.seed import seed_demo
 from app.sms import send_sms
+from app.email_service import send_attendance_link_email
+from app.import_export import import_students_to_classroom, export_classroom_to_excel, generate_csv_template
 from app.admin_import import router as admin_router
 from app.admin_ui import router as admin_ui_router
 
@@ -499,6 +501,50 @@ def attendance_dashboard(request: Request, class_id: int, db: Annotated[Session,
     })
 
 
+@app.post("/classes/{class_id}/import-csv")
+def import_csv_students(class_id: int, request: Request, db: Annotated[Session, Depends(get_db)],
+                       csv_content: str = Form(...)):
+    classroom = db.query(Classroom).filter(Classroom.id == class_id).first()
+    if not classroom:
+        raise HTTPException(404, "Classroom not found")
+
+    imported, skipped, errors = import_students_to_classroom(classroom, csv_content, db)
+    detail = {"imported": imported, "skipped": skipped}
+    if errors:
+        detail["errors"] = errors[:10]
+    write_audit(db, "csv_import", "classroom", class_id, detail=detail)
+
+    return RedirectResponse(
+        f"/classes/{class_id}?import_ok={imported}&import_skipped={skipped}&import_errors={len(errors)}",
+        status_code=303)
+
+
+@app.get("/classes/{class_id}/export-excel")
+def export_class_excel(class_id: int, db: Annotated[Session, Depends(get_db)]):
+    classroom = db.query(Classroom).filter(Classroom.id == class_id).first()
+    if not classroom:
+        raise HTTPException(404, "Classroom not found")
+
+    excel_bytes = export_classroom_to_excel(classroom, db)
+    filename = f"Tmima_{classroom.name.replace(' ', '_')}.xlsx"
+
+    return Response(
+        content=excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@app.get("/classes/{class_id}/csv-template")
+def get_csv_template():
+    template = generate_csv_template()
+    return Response(
+        content=template,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=template.csv"}
+    )
+
+
 @app.get("/classes/{class_id}/history", response_class=HTMLResponse)
 def class_history(request: Request, class_id: int, db: Annotated[Session, Depends(get_db)]):
     classroom = db.query(Classroom).options(
@@ -643,30 +689,61 @@ def send_lesson_sms(lesson_id: int, request: Request, db: Annotated[Session, Dep
     if not lesson:
         raise HTTPException(404, "Lesson not found")
     assert_lesson_open(lesson)
-    sent = failed = skipped = 0
+    sms_sent = sms_failed = email_sent = email_failed = no_contact = 0
+
     for att in lesson.attendance_rows:
         student = att.student
-        if not student.phone:
-            skipped += 1
+        link = student_link(att)
+        lesson_date = lesson.starts_at.strftime("%d/%m/%Y")
+
+        if student.phone:
+            body = sms_body_for_attendance(att)
+            result = send_sms(student.phone, body)
+            db.add(SmsMessage(lesson_id=lesson.id, attendance_id=att.id, student_id=student.id,
+                              to_phone=student.phone, body=body, provider=result.provider,
+                              status=result.status, provider_response=result.response,
+                              sent_at=now_utc() if result.ok else None))
+            if result.ok:
+                sms_sent += 1
+                db.commit()
+                continue
+            else:
+                sms_failed += 1
+
+        if student.email:
+            ok, msg = send_attendance_link_email(student.email, student.full_name, lesson_date, link, include_qr=True)
+            db.add(EmailMessage(lesson_id=lesson.id, attendance_id=att.id, student_id=student.id,
+                               to_email=student.email, subject=f"Επιβεβαίωση Παρουσίας - {lesson_date}",
+                               body=link, status="sent" if ok else "failed",
+                               provider_response=msg, sent_at=now_utc() if ok else None))
+            if ok:
+                email_sent += 1
+                db.commit()
+                continue
+            else:
+                email_failed += 1
+
+        no_contact += 1
+        if student.phone:
+            db.add(SmsMessage(lesson_id=lesson.id, attendance_id=att.id, student_id=student.id,
+                              to_phone=student.phone, body="", provider=settings.sms_provider,
+                              status="no_email", provider_response="SMS sent"))
+        elif student.email:
+            db.add(EmailMessage(lesson_id=lesson.id, attendance_id=att.id, student_id=student.id,
+                               to_email=student.email, subject="", body="", status="no_phone",
+                               provider_response="Email sent"))
+        else:
             db.add(SmsMessage(lesson_id=lesson.id, attendance_id=att.id, student_id=student.id,
                               to_phone="", body="", provider=settings.sms_provider,
-                              status="no_phone", provider_response="No phone number"))
-            continue
-        body = sms_body_for_attendance(att)
-        result = send_sms(student.phone, body)
-        db.add(SmsMessage(lesson_id=lesson.id, attendance_id=att.id, student_id=student.id,
-                          to_phone=student.phone, body=body, provider=result.provider,
-                          status=result.status, provider_response=result.response,
-                          sent_at=now_utc() if result.ok else None))
-        if result.ok:
-            sent += 1
-        else:
-            failed += 1
+                              status="no_contact", provider_response="No phone or email"))
+
     db.commit()
-    write_audit(db, "sms_links_sent", "lesson", lesson.id, actor=actor_name(request),
-                detail={"sent": sent, "failed": failed, "skipped": skipped, "provider": settings.sms_provider})
-    return RedirectResponse(f"/lessons/{lesson_id}?sms_sent={sent}&sms_failed={failed}&sms_skipped={skipped}",
-                            status_code=303)
+    write_audit(db, "notifications_sent", "lesson", lesson.id, actor=actor_name(request),
+                detail={"sms_sent": sms_sent, "sms_failed": sms_failed, "email_sent": email_sent,
+                        "email_failed": email_failed, "no_contact": no_contact})
+    return RedirectResponse(
+        f"/lessons/{lesson_id}?sms_sent={sms_sent}&sms_failed={sms_failed}&email_sent={email_sent}&email_failed={email_failed}&no_contact={no_contact}",
+        status_code=303)
 
 @app.post("/api/lessons/{lesson_id}/scan")
 async def scan_student_qr(lesson_id: int, request: Request, db: Annotated[Session, Depends(get_db)]):

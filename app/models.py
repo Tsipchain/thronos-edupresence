@@ -188,3 +188,21 @@ class SmsMessage(Base):
     lesson = relationship("Lesson")
     attendance = relationship("Attendance")
     student = relationship("Student")
+
+class EmailMessage(Base):
+    __tablename__ = "email_messages"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    lesson_id: Mapped[int | None] = mapped_column(ForeignKey("lessons.id"), nullable=True)
+    attendance_id: Mapped[int | None] = mapped_column(ForeignKey("attendance.id"), nullable=True)
+    student_id: Mapped[int | None] = mapped_column(ForeignKey("students.id"), nullable=True)
+    to_email: Mapped[str] = mapped_column(String(200), default="")
+    subject: Mapped[str] = mapped_column(String(250), default="")
+    body: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(80), default="queued")
+    provider_response: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    lesson = relationship("Lesson")
+    attendance = relationship("Attendance")
+    student = relationship("Student")

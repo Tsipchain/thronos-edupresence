@@ -44,9 +44,11 @@ class Settings(BaseSettings):
 
     smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 587
-    smtp_user: str = ""
+    smtp_username: str = ""
     smtp_password: str = ""
-    smtp_from: str = "noreply@thronoschain.org"
+    smtp_from_email: str = "noreply@thronoschain.org"
+    smtp_from_name: str = "Thronos EduPresence"
+    smtp_use_tls: bool = True
 
     l2e_enabled: bool = False
     l2e_base_url: str = "https://api.thronoschain.org"
