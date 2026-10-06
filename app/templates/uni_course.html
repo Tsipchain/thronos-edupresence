@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block breadcrumbs %}
+<span>›</span> <a href="/uni">Πανεπιστήμια</a>
+<span>›</span> <a href="/uni/{{ university.id }}">{{ university.name }}</a>
+<span>›</span> <a href="/uni/{{ university.id }}/courses/{{ course.id }}">{{ course.code }} {{ course.title }}</a>
+{% endblock %}
+
+{% block content %}
+<h2>{{ course.code }} — {{ course.title }}</h2>
+<p class="meta">{{ course.teacher_name }} · {{ course.semester or '—' }} · {{ course.credits }} ECTS · Βάση: {{ course.pass_grade }}</p>
+{% if course.description %}<p>{{ course.description }}</p>{% endif %}
+
+{# ── Enrolled Students ── #}
+<h3>Εγγεγραμμένοι φοιτητές ({{ enrollments | length }})</h3>
+<table class="data-table">
+  <thead><tr><th>#</th><th>Ονοματεπώνυμο</th><th>Email</th><th>Wallet</th></tr></thead>
+  <tbody>
+  {% for e in enrollments %}
+    <tr><td>{{ loop.index }}</td><td>{{ e.student.full_name }}</td><td>{{ e.student.email }}</td><td>{{ e.student.thr_wallet or '—' }}</td></tr>
+  {% else %}
+    <tr><td colspan="4" class="meta">Κανένας εγγεγραμμένος.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+{# ── Assignments ── #}
+<h3>Εργασίες / Εξετάσεις</h3>
+<table class="data-table">
+  <thead><tr><th>Τίτλος</th><th>Τύπος</th><th>Βαρύτητα</th><th>Max</th><th>Υποβολές</th><th>Προθεσμία</th></tr></thead>
+  <tbody>
+  {% for a in course.assignments %}
+    <tr>
+      <td><a href="/uni/{{ university.id }}/courses/{{ course.id }}/assignments/{{ a.id }}">{{ a.title }}</a></td>
+      <td>{{ a.assignment_type }}</td>
+      <td>{{ a.weight }}</td>
+      <td>{{ a.max_score }}</td>
+      <td>{{ a.submissions | length }}</td>
+      <td>{{ a.due_at.strftime('%d/%m/%Y %H:%M') if a.due_at else '—' }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="meta">Δεν υπάρχουν εργασίες.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<details class="form-toggle">
+  <summary>+ Νέα εργασία</summary>
+  <form method="POST" action="/uni/{{ university.id }}/courses/{{ course.id }}/assignments" class="inline-form">
+    <label>Τίτλος <input name="title" required></label>
+    <label>Περιγραφή <textarea name="description" rows="2"></textarea></label>
+    <label>Τύπος
+      <select name="assignment_type">
+        <option value="homework">Εργασία</option>
+        <option value="exam">Εξέταση</option>
+        <option value="project">Project</option>
+        <option value="quiz">Quiz</option>
+      </select>
+    </label>
+    <label>Μέγ. βαθμός <input name="max_score" type="number" step="0.5" value="100"></label>
+    <label>Βαρύτητα <input name="weight" type="number" step="0.1" value="1"></label>
+    <label>Προθεσμία <input name="due_at" type="datetime-local"></label>
+    <label><input name="lock_on_chain" type="checkbox" value="true"> Κλείδωμα βαθμών στο blockchain</label>
+    <button type="submit">Δημιουργία</button>
+  </form>
+</details>
+
+{# ── Live Sessions ── #}
+<h3>Live Μαθήματα</h3>
+<table class="data-table">
+  <thead><tr><th>Τίτλος</th><th>Ημερομηνία</th><th>Διάρκεια</th><th>Κατάσταση</th><th>Ενέργεια</th></tr></thead>
+  <tbody>
+  {% for ls in course.live_sessions %}
+    <tr>
+      <td>{{ ls.title }}</td>
+      <td>{{ ls.scheduled_at.strftime('%d/%m/%Y %H:%M') }}</td>
+      <td>{{ ls.duration_minutes }} λεπτά</td>
+      <td>{{ status_label(ls.status) }}</td>
+      <td>
+        {% if ls.status == 'scheduled' %}
+          <form method="POST" action="/uni/{{ university.id }}/courses/{{ course.id }}/live/{{ ls.id }}/start" style="display:inline">
+            <button type="submit" class="btn-small">Εκκίνηση</button>
+          </form>
+        {% elif ls.status == 'live' %}
+          <a href="{{ ls.join_url }}" target="_blank" class="btn-small">Σύνδεση</a>
+          <form method="POST" action="/uni/{{ university.id }}/courses/{{ course.id }}/live/{{ ls.id }}/end" style="display:inline">
+            <button type="submit" class="btn-small btn-danger">Τέλος</button>
+          </form>
+        {% else %}
+          <span class="meta">Ολοκληρώθηκε</span>
+        {% endif %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="meta">Δεν υπάρχουν live μαθήματα.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<details class="form-toggle">
+  <summary>+ Νέο live μάθημα</summary>
+  <form method="POST" action="/uni/{{ university.id }}/courses/{{ course.id }}/live" class="inline-form">
+    <label>Τίτλος <input name="title" value="Live Classroom"></label>
+    <label>Ημερομηνία <input name="scheduled_at" type="datetime-local"></label>
+    <label>Διάρκεια (λεπτά) <input name="duration_minutes" type="number" value="90"></label>
+    <button type="submit">Δημιουργία</button>
+  </form>
+</details>
+
+{# ── Grades ── #}
+<h3>Τελικοί βαθμοί</h3>
+{% if course.grades %}
+<table class="data-table">
+  <thead><tr><th>Φοιτητής</th><th>Βαθμός</th><th>Γράμμα</th><th>Πέρασε</th><th>Κλειδωμένο</th></tr></thead>
+  <tbody>
+  {% for g in course.grades %}
+    <tr>
+      <td>{{ g.student.full_name }}</td>
+      <td>{{ '%.2f' | format(g.final_score) if g.final_score is not none else '—' }}</td>
+      <td>{{ g.letter_grade or '—' }}</td>
+      <td>{% if g.passed %}Ναι{% else %}Όχι{% endif %}</td>
+      <td>{% if g.locked %}🔒 {{ g.attestation_hash[:12] }}…{% else %}—{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="meta">Δεν υπάρχουν βαθμοί. Υπολογίστε πρώτα.</p>
+{% endif %}
+
+<div style="display:flex; gap:0.5rem; margin-top:0.5rem">
+  <form method="POST" action="/uni/{{ university.id }}/courses/{{ course.id }}/grades/compute">
+    <button type="submit">Υπολογισμός βαθμών</button>
+  </form>
+  <form method="POST" action="/uni/{{ university.id }}/courses/{{ course.id }}/grades/lock">
+    <button type="submit">Κλείδωμα στο Blockchain</button>
+  </form>
+  <form method="POST" action="/uni/{{ university.id }}/courses/{{ course.id }}/certificates/issue">
+    <button type="submit">Έκδοση πιστοποιητικών</button>
+  </form>
+</div>
+
+{# ── Certificates ── #}
+{% if course.certificates %}
+<h3>Πιστοποιητικά</h3>
+<table class="data-table">
+  <thead><tr><th>Φοιτητής</th><th>Τύπος</th><th>Attestation</th><th>Ημ/νία</th></tr></thead>
+  <tbody>
+  {% for cert in course.certificates %}
+    <tr>
+      <td>{{ cert.student.full_name if cert.student else '—' }}</td>
+      <td>{{ cert.certificate_type }}</td>
+      <td>{{ cert.attestation_hash[:16] }}…</td>
+      <td>{{ cert.issued_at.strftime('%d/%m/%Y') }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

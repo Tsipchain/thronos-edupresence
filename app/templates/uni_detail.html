@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block breadcrumbs %}
+<span>›</span> <a href="/uni">Πανεπιστήμια</a>
+<span>›</span> <a href="/uni/{{ university.id }}">{{ university.name }}</a>
+{% endblock %}
+
+{% block content %}
+<h2>{{ university.name }}</h2>
+<p class="meta">{{ university.slug }} · {{ university.domain or '—' }} · {{ university.contact_email or '—' }}</p>
+
+<h3>Μαθήματα</h3>
+<table class="data-table">
+  <thead><tr><th>Κωδ.</th><th>Τίτλος</th><th>Καθηγητής</th><th>Εξάμηνο</th><th>ECTS</th><th>Εργασίες</th><th>Live</th></tr></thead>
+  <tbody>
+  {% for c in university.courses %}
+    <tr>
+      <td><a href="/uni/{{ university.id }}/courses/{{ c.id }}">{{ c.code or '—' }}</a></td>
+      <td><a href="/uni/{{ university.id }}/courses/{{ c.id }}">{{ c.title }}</a></td>
+      <td>{{ c.teacher_name }}</td>
+      <td>{{ c.semester or '—' }}</td>
+      <td>{{ c.credits }}</td>
+      <td>{{ c.assignments | length }}</td>
+      <td>{{ c.live_sessions | length }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" class="meta">Δεν υπάρχουν μαθήματα.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<details class="form-toggle" style="margin-top:1.5rem">
+  <summary>+ Νέο μάθημα</summary>
+  <form method="POST" action="/uni/{{ university.id }}/courses" class="inline-form">
+    <label>Κωδικός <input name="code" placeholder="CS101"></label>
+    <label>Τίτλος <input name="title" required></label>
+    <label>Περιγραφή <textarea name="description" rows="2"></textarea></label>
+    <label>Εξάμηνο <input name="semester" placeholder="Fall 2026"></label>
+    <label>ECTS <input name="credits" type="number" value="6"></label>
+    <label>Καθηγητής <input name="teacher_name"></label>
+    <label>Email καθηγητή <input name="teacher_email" type="email"></label>
+    <label>Μέγ. φοιτητές <input name="max_students" type="number" value="100"></label>
+    <label>Βάση <input name="pass_grade" type="number" step="0.5" value="5"></label>
+    <button type="submit">Δημιουργία</button>
+  </form>
+</details>
+{% endblock %}

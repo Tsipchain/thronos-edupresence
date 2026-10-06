@@ -26,10 +26,12 @@ from app.email_service import send_attendance_link_email
 from app.import_export import import_students_to_classroom, export_classroom_to_excel, generate_csv_template
 from app.admin_import import router as admin_router
 from app.admin_ui import router as admin_ui_router
+from app.university import router as university_router
 
 app = FastAPI(title=settings.app_name)
 app.include_router(admin_router)
 app.include_router(admin_ui_router)
+app.include_router(university_router)
 
 app.add_middleware(
     CORSMiddleware,
