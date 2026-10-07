@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block breadcrumbs %}
+<span>›</span> <a href="/uni">Πανεπιστήμια</a>
+<span>›</span> <a href="/uni/{{ university.id }}">{{ university.name }}</a>
+<span>›</span> <a href="/uni/{{ university.id }}/courses/{{ course.id }}">{{ course.code }}</a>
+<span>›</span> {{ assignment.title }}
+{% endblock %}
+
+{% block content %}
+<h2>{{ assignment.title }}</h2>
+<p class="meta">{{ assignment.assignment_type | upper }} · Max: {{ assignment.max_score }} · Βαρύτητα: {{ assignment.weight }}
+  {% if assignment.due_at %} · Προθεσμία: {{ assignment.due_at.strftime('%d/%m/%Y %H:%M') }}{% endif %}
+  {% if assignment.lock_on_chain %} · 🔒 Blockchain{% endif %}
+</p>
+{% if assignment.description %}<p>{{ assignment.description }}</p>{% endif %}
+
+<h3>Υποβολές ({{ assignment.submissions | length }})</h3>
+<table class="data-table">
+  <thead><tr><th>Φοιτητής</th><th>Υποβλήθηκε</th><th>Hash</th><th>Βαθμός</th><th>Κατάσταση</th><th>Βαθμολόγηση</th></tr></thead>
+  <tbody>
+  {% for sub in assignment.submissions %}
+    <tr>
+      <td>{{ sub.student.full_name }}</td>
+      <td>{{ sub.submitted_at.strftime('%d/%m/%Y %H:%M') }}</td>
+      <td title="{{ sub.content_hash }}">{{ sub.content_hash[:12] }}…</td>
+      <td>{{ sub.score if sub.score is not none else '—' }} / {{ assignment.max_score }}</td>
+      <td>{{ sub.status }}</td>
+      <td>
+        {% if sub.status != 'graded' %}
+        <form method="POST" action="/uni/{{ university.id }}/courses/{{ course.id }}/assignments/{{ assignment.id }}/grade" class="inline-form-row">
+          <input type="hidden" name="submission_id" value="{{ sub.id }}">
+          <input name="score" type="number" step="0.5" min="0" max="{{ assignment.max_score }}" style="width:5rem" required>
+          <input name="feedback" placeholder="Σχόλια" style="width:10rem">
+          <button type="submit" class="btn-small">Βαθμολόγηση</button>
+        </form>
+        {% else %}
+        <span class="meta">{{ sub.feedback[:40] }}{% if sub.feedback|length > 40 %}…{% endif %}</span>
+        {% endif %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="meta">Δεν υπάρχουν υποβολές.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+{# Submit on behalf (teacher submitting for a student) #}
+{% if enrolled %}
+<details class="form-toggle" style="margin-top:1rem">
+  <summary>+ Υποβολή εργασίας (εκ μέρους φοιτητή)</summary>
+  <form method="POST" action="/uni/{{ university.id }}/courses/{{ course.id }}/assignments/{{ assignment.id }}/submit" class="inline-form">
+    <label>Φοιτητής
+      <select name="student_id" required>
+        <option value="">— Επιλέξτε —</option>
+        {% for s in enrolled %}
+          {% if s.id not in submitted_ids %}
+          <option value="{{ s.id }}">{{ s.full_name }}</option>
+          {% endif %}
+        {% endfor %}
+      </select>
+    </label>
+    <label>Περιεχόμενο / απαντήσεις <textarea name="content" rows="3"></textarea></label>
+    <label>URL αρχείου <input name="file_url" placeholder="https://..."></label>
+    <button type="submit">Υποβολή</button>
+  </form>
+</details>
+{% endif %}
+{% endblock %}

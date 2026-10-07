@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block breadcrumbs %}
+<span>›</span> <a href="/uni">Πανεπιστήμια</a>
+<span>›</span> <a href="/uni/{{ university.id }}">{{ university.name }}</a>
+<span>›</span> <a href="/uni/{{ university.id }}/courses/{{ course.id }}">{{ course.code }}</a>
+<span>›</span> Live: {{ live_session.title }}
+{% endblock %}
+
+{% block content %}
+<h2>{{ live_session.title }}</h2>
+<p class="meta">{{ course.code }} {{ course.title }} · {{ live_session.scheduled_at.strftime('%d/%m/%Y %H:%M') }} · {{ live_session.duration_minutes }} λεπτά</p>
+
+{% if live_session.status == 'scheduled' %}
+  <div class="card" style="text-align:center; padding:2rem">
+    <h3>Το μάθημα δεν έχει ξεκινήσει ακόμα</h3>
+    <p>Προγραμματισμένο: {{ live_session.scheduled_at.strftime('%d/%m/%Y %H:%M') }}</p>
+    <p class="meta">Room ID: {{ live_session.room_id }}</p>
+  </div>
+
+{% elif live_session.status == 'live' %}
+  <div class="card" style="text-align:center; padding:2rem; border-left:4px solid #10B981">
+    <h3 style="color:#10B981">Το μάθημα είναι LIVE</h3>
+    <p>Ξεκίνησε: {{ live_session.started_at.strftime('%H:%M') if live_session.started_at else '—' }}</p>
+    <p class="meta">Room ID: {{ live_session.room_id }}</p>
+    <div id="live-classroom" style="margin-top:1rem; min-height:400px; background:#1a1a2e; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#ccc">
+      <p>Video/WebRTC stream area — connect via room <code>{{ live_session.room_id }}</code></p>
+    </div>
+  </div>
+
+{% else %}
+  <div class="card" style="text-align:center; padding:2rem">
+    <h3>Το μάθημα ολοκληρώθηκε</h3>
+    <p>{{ live_session.started_at.strftime('%H:%M') if live_session.started_at else '—' }} — {{ live_session.ended_at.strftime('%H:%M') if live_session.ended_at else '—' }}</p>
+    {% if live_session.recording_url %}
+      <a href="{{ live_session.recording_url }}" target="_blank">Εγγραφή</a>
+    {% endif %}
+  </div>
+{% endif %}
+{% endblock %}

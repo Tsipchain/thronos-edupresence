@@ -1,16 +1,35 @@
 from __future__ import annotations
 
 from datetime import datetime
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db import Base
 
 def now_utc() -> datetime:
     return datetime.utcnow()
 
+class University(Base):
+    __tablename__ = "universities"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(250), nullable=False)
+    slug: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    domain: Mapped[str] = mapped_column(String(200), default="")
+    contact_email: Mapped[str] = mapped_column(String(200), default="")
+    contact_phone: Mapped[str] = mapped_column(String(80), default="")
+    address: Mapped[str] = mapped_column(String(300), default="")
+    logo_url: Mapped[str] = mapped_column(String(500), default="")
+    l2e_tenant_id: Mapped[str] = mapped_column(String(120), default="")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+    courses = relationship("Course", back_populates="university", cascade="all, delete-orphan")
+    nodes = relationship("Node", back_populates="university")
+
+
 class Node(Base):
     __tablename__ = "nodes"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    university_id: Mapped[int | None] = mapped_column(ForeignKey("universities.id"), nullable=True)
     municipality: Mapped[str] = mapped_column(String(160), default="ΘΕΣΣΑΛΟΝΙΚΗΣ")
     name: Mapped[str] = mapped_column(String(250), nullable=False)
     responsible_name: Mapped[str] = mapped_column(String(200), default="")
@@ -19,6 +38,7 @@ class Node(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
 
+    university = relationship("University", back_populates="nodes")
     classrooms = relationship("Classroom", back_populates="node", cascade="all, delete-orphan")
     students = relationship("Student", back_populates="node", cascade="all, delete-orphan")
 
@@ -206,3 +226,134 @@ class EmailMessage(Base):
     lesson = relationship("Lesson")
     attendance = relationship("Attendance")
     student = relationship("Student")
+
+
+# ---------------------------------------------------------------------------
+# University Tenant: Courses, Assignments, Grading, Certificates, Live Sessions
+# ---------------------------------------------------------------------------
+
+class Course(Base):
+    __tablename__ = "courses"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    university_id: Mapped[int] = mapped_column(ForeignKey("universities.id"), nullable=False)
+    classroom_id: Mapped[int | None] = mapped_column(ForeignKey("classrooms.id"), nullable=True)
+    code: Mapped[str] = mapped_column(String(40), default="")
+    title: Mapped[str] = mapped_column(String(250), nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="")
+    semester: Mapped[str] = mapped_column(String(40), default="")
+    credits: Mapped[int] = mapped_column(Integer, default=0)
+    max_students: Mapped[int] = mapped_column(Integer, default=100)
+    teacher_name: Mapped[str] = mapped_column(String(200), default="")
+    teacher_email: Mapped[str] = mapped_column(String(200), default="")
+    pass_grade: Mapped[float] = mapped_column(Float, default=5.0)
+    l2e_course_id: Mapped[str] = mapped_column(String(120), default="")
+    status: Mapped[str] = mapped_column(String(40), default="active")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+    university = relationship("University", back_populates="courses")
+    classroom = relationship("Classroom")
+    assignments = relationship("Assignment", back_populates="course", cascade="all, delete-orphan")
+    grades = relationship("Grade", back_populates="course", cascade="all, delete-orphan")
+    certificates = relationship("Certificate", back_populates="course", cascade="all, delete-orphan")
+    live_sessions = relationship("LiveSession", back_populates="course", cascade="all, delete-orphan")
+
+
+class Assignment(Base):
+    __tablename__ = "assignments"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"), nullable=False)
+    title: Mapped[str] = mapped_column(String(250), nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="")
+    assignment_type: Mapped[str] = mapped_column(String(40), default="homework")  # homework | exam | project | quiz
+    max_score: Mapped[float] = mapped_column(Float, default=100.0)
+    weight: Mapped[float] = mapped_column(Float, default=1.0)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    lock_on_chain: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[str] = mapped_column(String(40), default="draft")  # draft | published | closed | graded
+    created_by: Mapped[str] = mapped_column(String(200), default="teacher")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+    course = relationship("Course", back_populates="assignments")
+    submissions = relationship("Submission", back_populates="assignment", cascade="all, delete-orphan")
+
+
+class Submission(Base):
+    __tablename__ = "submissions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    assignment_id: Mapped[int] = mapped_column(ForeignKey("assignments.id"), nullable=False)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), nullable=False)
+    content: Mapped[str] = mapped_column(Text, default="")
+    file_url: Mapped[str] = mapped_column(String(500), default="")
+    content_hash: Mapped[str] = mapped_column(String(128), default="")
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    feedback: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(40), default="submitted")  # submitted | graded | returned
+    graded_by: Mapped[str] = mapped_column(String(200), default="")
+    graded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    attestation_hash: Mapped[str] = mapped_column(String(128), default="")
+    submitted_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+    assignment = relationship("Assignment", back_populates="submissions")
+    student = relationship("Student")
+
+
+class Grade(Base):
+    __tablename__ = "grades"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"), nullable=False)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), nullable=False)
+    final_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    letter_grade: Mapped[str] = mapped_column(String(10), default="")
+    passed: Mapped[bool] = mapped_column(Boolean, default=False)
+    locked: Mapped[bool] = mapped_column(Boolean, default=False)
+    attestation_hash: Mapped[str] = mapped_column(String(128), default="")
+    graded_by: Mapped[str] = mapped_column(String(200), default="")
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+    course = relationship("Course", back_populates="grades")
+    student = relationship("Student")
+
+
+class Certificate(Base):
+    __tablename__ = "certificates"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"), nullable=False)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), nullable=False)
+    certificate_type: Mapped[str] = mapped_column(String(40), default="completion")  # completion | excellence | attendance
+    title: Mapped[str] = mapped_column(String(250), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    issued_by: Mapped[str] = mapped_column(String(200), default="")
+    tx_hash: Mapped[str] = mapped_column(String(128), default="")
+    attestation_hash: Mapped[str] = mapped_column(String(128), default="")
+    metadata_json: Mapped[str] = mapped_column(Text, default="{}")
+    status: Mapped[str] = mapped_column(String(40), default="issued")  # issued | revoked
+    issued_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+    course = relationship("Course", back_populates="certificates")
+    student = relationship("Student")
+
+
+class LiveSession(Base):
+    __tablename__ = "live_sessions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"), nullable=False)
+    lesson_id: Mapped[int | None] = mapped_column(ForeignKey("lessons.id"), nullable=True)
+    title: Mapped[str] = mapped_column(String(250), default="Live Classroom")
+    room_id: Mapped[str] = mapped_column(String(120), default="")
+    join_url: Mapped[str] = mapped_column(String(500), default="")
+    scheduled_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    duration_minutes: Mapped[int] = mapped_column(Integer, default=90)
+    status: Mapped[str] = mapped_column(String(40), default="scheduled")  # scheduled | live | ended
+    recording_url: Mapped[str] = mapped_column(String(500), default="")
+    attendee_count: Mapped[int] = mapped_column(Integer, default=0)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+    course = relationship("Course", back_populates="live_sessions")
+    lesson = relationship("Lesson")

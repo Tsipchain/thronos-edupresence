@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block breadcrumbs %}<span>›</span> <a href="/uni">Πανεπιστήμια</a>{% endblock %}
+{% block content %}
+<h2>Πανεπιστήμια / Ιδρύματα</h2>
+
+<div class="card-grid">
+{% for uni in universities %}
+  <a href="/uni/{{ uni.id }}" class="card-link">
+    <div class="card">
+      <h3>{{ uni.name }}</h3>
+      <p class="meta">{{ uni.slug }} · {{ uni.domain or '—' }}</p>
+      <p class="meta">{{ uni.contact_email }}</p>
+    </div>
+  </a>
+{% else %}
+  <p class="meta">Δεν υπάρχουν ιδρύματα ακόμα.</p>
+{% endfor %}
+</div>
+
+<details class="form-toggle" style="margin-top:1.5rem">
+  <summary>+ Νέο ίδρυμα</summary>
+  <form method="POST" action="/uni" class="inline-form">
+    <label>Όνομα <input name="name" required></label>
+    <label>Slug <input name="slug" placeholder="auto"></label>
+    <label>Domain <input name="domain" placeholder="uni.gr"></label>
+    <label>Email <input name="contact_email" type="email"></label>
+    <button type="submit">Δημιουργία</button>
+  </form>
+</details>
+{% endblock %}
