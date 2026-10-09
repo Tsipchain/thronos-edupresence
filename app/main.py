@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.attestation import canonical_hash, record_attestation, write_audit
 from app.config import settings
+from sqlalchemy import inspect, text
 from app.db import Base, engine, get_db
 from app.models import (
     Attendance, Classroom, Enrollment, Lesson, Makeup,
@@ -45,9 +46,34 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
 
+def _auto_migrate() -> None:
+    """Add columns present in models but missing from the DB (SQLite ALTER TABLE ADD COLUMN)."""
+    insp = inspect(engine)
+    existing_tables = insp.get_table_names()
+    for table in Base.metadata.sorted_tables:
+        if table.name not in existing_tables:
+            continue
+        db_cols = {c["name"] for c in insp.get_columns(table.name)}
+        for col in table.columns:
+            if col.name in db_cols:
+                continue
+            col_type = col.type.compile(dialect=engine.dialect)
+            nullable = "NULL" if col.nullable else "NOT NULL"
+            default = ""
+            if col.default is not None and col.default.is_scalar:
+                val = col.default.arg
+                default = f" DEFAULT '{val}'" if isinstance(val, str) else f" DEFAULT {val}"
+            elif col.nullable:
+                default = " DEFAULT NULL"
+            stmt = f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {col_type} {nullable}{default}'
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
+
+
 @app.on_event("startup")
 def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
+    _auto_migrate()
     if settings.auto_seed_demo:
         db = next(get_db())
         try:
