@@ -1,9 +1,10 @@
 from __future__ import annotations
 import csv
 import io
+import time
 from typing import Annotated
 from fastapi import Depends, File, Form, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.routing import APIRouter
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session, joinedload
@@ -11,10 +12,14 @@ from app.config import settings
 from app.db import get_db
 from app.models import Classroom, Enrollment, Node, Student, now_utc
 from app.attestation import write_audit
+from app.security import sign_payload, verify_token
 from app.sms import send_sms
 
 router = APIRouter(prefix="/admin", tags=["admin-ui"])
 templates = Jinja2Templates(directory="app/templates")
+
+_COOKIE = settings.session_cookie_name or "thronos_admin"
+_TTL = settings.session_ttl_hours * 3600
 
 
 def _key_ok(key: str) -> bool:
@@ -24,23 +29,58 @@ def _key_ok(key: str) -> bool:
     return bool(key) and key == effective_key
 
 
+def _admin_session(request: Request) -> dict | None:
+    token = request.cookies.get(_COOKIE, "")
+    if not token:
+        return None
+    try:
+        return verify_token(token, expected_type="admin_session")
+    except Exception:
+        return None
+
+
+def _set_session_cookie(response: Response) -> Response:
+    payload = {
+        "typ": "admin_session",
+        "role": "super_admin",
+        "iat": int(time.time()),
+        "exp": int(time.time()) + _TTL,
+    }
+    token = sign_payload(payload)
+    response.set_cookie(
+        key=_COOKIE,
+        value=token,
+        httponly=True,
+        secure=settings.environment == "production",
+        samesite="lax",
+        max_age=_TTL,
+        path="/admin",
+    )
+    return response
+
+
+def _clear_session_cookie(response: Response) -> Response:
+    response.delete_cookie(key=_COOKIE, path="/admin")
+    return response
+
+
 # ---------------------------------------------------------------------------
 # Login
 # ---------------------------------------------------------------------------
 
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
-def admin_home(request: Request, key: str = "", msg: str = ""):
-    if not key or not _key_ok(key):
+def admin_home(request: Request, msg: str = ""):
+    if not _admin_session(request):
         return templates.TemplateResponse(request, "admin_login.html",
-            {"request": request, "error": "Λάθος κλειδί." if (key and not _key_ok(key)) else ""})
+            {"request": request, "error": ""})
     db = next(get_db())
     nodes = db.query(Node).options(
         joinedload(Node.classrooms).joinedload(Classroom.enrollments),
     ).order_by(Node.id).all()
     db.close()
     return templates.TemplateResponse(request, "admin_home.html",
-        {"request": request, "key": key, "nodes": nodes, "msg": msg})
+        {"request": request, "nodes": nodes, "msg": msg})
 
 
 @router.post("", response_class=HTMLResponse)
@@ -48,7 +88,16 @@ def admin_login(request: Request, key: str = Form("")):
     if not _key_ok(key):
         return templates.TemplateResponse(request, "admin_login.html",
             {"request": request, "error": "Λάθος κλειδί Admin."})
-    return RedirectResponse(f"/admin?key={key}", status_code=303)
+    response = RedirectResponse("/admin", status_code=303)
+    _set_session_cookie(response)
+    return response
+
+
+@router.get("/logout")
+def admin_logout():
+    response = RedirectResponse("/admin", status_code=303)
+    _clear_session_cookie(response)
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -57,18 +106,18 @@ def admin_login(request: Request, key: str = Form("")):
 
 @router.post("/nodes/create")
 def create_node(
+    request: Request,
     db: Annotated[Session, Depends(get_db)],
-    key: str = Form(""),
     name: str = Form(...),
     municipality: str = Form("ΘΕΣΣΑΛΟΝΙΚΗΣ"),
     responsible_name: str = Form(""),
     capacity: int = Form(15),
 ):
-    if not _key_ok(key):
+    if not _admin_session(request):
         return RedirectResponse("/admin", status_code=303)
     existing = db.query(Node).filter(Node.name == name.strip()).first()
     if existing:
-        return RedirectResponse(f"/admin?key={key}&msg=Ο+κόμβος+υπάρχει+ήδη", status_code=303)
+        return RedirectResponse("/admin?msg=Ο+κόμβος+υπάρχει+ήδη", status_code=303)
     node = Node(
         name=name.strip(),
         municipality=municipality.strip() or "ΘΕΣΣΑΛΟΝΙΚΗΣ",
@@ -79,7 +128,7 @@ def create_node(
     db.commit()
     write_audit(db, "admin_node_created", "node", node.id,
                 actor="admin", detail={"name": node.name})
-    return RedirectResponse(f"/admin?key={key}&msg=Κόμβος+δημιουργήθηκε", status_code=303)
+    return RedirectResponse("/admin?msg=Κόμβος+δημιουργήθηκε", status_code=303)
 
 
 # ---------------------------------------------------------------------------
@@ -87,21 +136,20 @@ def create_node(
 # ---------------------------------------------------------------------------
 
 @router.get("/import", response_class=HTMLResponse)
-def import_page(request: Request, key: str = ""):
-    if not _key_ok(key):
+def import_page(request: Request):
+    if not _admin_session(request):
         return RedirectResponse("/admin", status_code=303)
     db = next(get_db())
     nodes = db.query(Node).order_by(Node.name).all()
     db.close()
     return templates.TemplateResponse(request, "admin_import_csv.html",
-        {"request": request, "key": key, "nodes": nodes, "result": None})
+        {"request": request, "nodes": nodes, "result": None})
 
 
 @router.post("/import/upload")
 async def import_upload(
     request: Request,
     db: Annotated[Session, Depends(get_db)],
-    key: str = Form(""),
     node_id: str = Form(""),
     new_node_name: str = Form(""),
     municipality: str = Form("ΘΕΣΣΑΛΟΝΙΚΗΣ"),
@@ -111,7 +159,7 @@ async def import_upload(
     target_hours: int = Form(40),
     file: UploadFile = File(...),
 ):
-    if not _key_ok(key):
+    if not _admin_session(request):
         return RedirectResponse("/admin", status_code=303)
 
     # Resolve or create node
@@ -135,7 +183,7 @@ async def import_upload(
     if not node:
         nodes = db.query(Node).order_by(Node.name).all()
         return templates.TemplateResponse(request, "admin_import_csv.html", {
-            "request": request, "key": key, "nodes": nodes,
+            "request": request, "nodes": nodes,
             "result": {"error": "Επιλέξτε ή δημιουργήστε κόμβο."},
         })
 
@@ -159,13 +207,13 @@ async def import_upload(
         else:
             nodes = db.query(Node).order_by(Node.name).all()
             return templates.TemplateResponse(request, "admin_import_csv.html", {
-                "request": request, "key": key, "nodes": nodes,
+                "request": request, "nodes": nodes,
                 "result": {"error": "Αποδεκτοί μόνο .csv και .xlsx"},
             })
     except Exception as exc:
         nodes = db.query(Node).order_by(Node.name).all()
         return templates.TemplateResponse(request, "admin_import_csv.html", {
-            "request": request, "key": key, "nodes": nodes,
+            "request": request, "nodes": nodes,
             "result": {"error": f"Σφάλμα ανάγνωσης αρχείου: {exc}"},
         })
 
@@ -218,7 +266,7 @@ async def import_upload(
                 actor="admin", detail={"created": len(created), "skipped": len(skipped)})
 
     return templates.TemplateResponse(request, "admin_import_csv.html", {
-        "request": request, "key": key,
+        "request": request,
         "nodes": db.query(Node).order_by(Node.name).all(),
         "result": {
             "ok": True,
@@ -238,9 +286,9 @@ async def import_upload(
 @router.get("/class/{class_id}", response_class=HTMLResponse)
 def admin_class(
     request: Request, class_id: int,
-    key: str = "", sms_sent: int = 0, sms_failed: int = 0, saved: int = 0,
+    sms_sent: int = 0, sms_failed: int = 0, saved: int = 0,
 ):
-    if not _key_ok(key):
+    if not _admin_session(request):
         return RedirectResponse("/admin", status_code=303)
     db = next(get_db())
     classroom = db.query(Classroom).options(
@@ -249,13 +297,13 @@ def admin_class(
     ).filter(Classroom.id == class_id).first()
     db.close()
     if not classroom:
-        return RedirectResponse(f"/admin?key={key}", status_code=303)
+        return RedirectResponse("/admin", status_code=303)
     enrollments = sorted(
         [e for e in classroom.enrollments if e.status == "active"],
         key=lambda e: e.student.full_name or "",
     )
     return templates.TemplateResponse(request, "admin_phones.html", {
-        "request": request, "key": key, "classroom": classroom,
+        "request": request, "classroom": classroom,
         "enrollments": enrollments,
         "sms_sent": sms_sent, "sms_failed": sms_failed, "saved": saved,
     })
@@ -265,9 +313,8 @@ def admin_class(
 async def update_phones(
     request: Request, class_id: int,
     db: Annotated[Session, Depends(get_db)],
-    key: str = Form(""),
 ):
-    if not _key_ok(key):
+    if not _admin_session(request):
         return RedirectResponse("/admin", status_code=303)
     form = await request.form()
     saved = 0
@@ -281,23 +328,23 @@ async def update_phones(
     db.commit()
     write_audit(db, "admin_phones_updated", "classroom", class_id,
                 actor="admin", detail={"updated": saved})
-    return RedirectResponse(f"/admin/class/{class_id}?key={key}&saved={saved}", status_code=303)
+    return RedirectResponse(f"/admin/class/{class_id}?saved={saved}", status_code=303)
 
 
 @router.post("/class/{class_id}/send-sms")
 def admin_send_sms(
+    request: Request,
     class_id: int,
     db: Annotated[Session, Depends(get_db)],
-    key: str = Form(""),
     message_template: str = Form("Γεια {name}! Παρακολουθήστε την παρουσία σας στο ThrEDU: {url}"),
 ):
-    if not _key_ok(key):
+    if not _admin_session(request):
         return RedirectResponse("/admin", status_code=303)
     classroom = db.query(Classroom).options(
         joinedload(Classroom.enrollments).joinedload(Enrollment.student),
     ).filter(Classroom.id == class_id).first()
     if not classroom:
-        return RedirectResponse(f"/admin?key={key}", status_code=303)
+        return RedirectResponse("/admin", status_code=303)
     enrollments = [e for e in classroom.enrollments if e.status == "active"]
     sent = failed = skipped = 0
     for enr in enrollments:
@@ -317,6 +364,6 @@ def admin_send_sms(
                 actor="admin", detail={"sent": sent, "failed": failed, "skipped": skipped})
     db.commit()
     return RedirectResponse(
-        f"/admin/class/{class_id}?key={key}&sms_sent={sent}&sms_failed={failed}",
+        f"/admin/class/{class_id}?sms_sent={sent}&sms_failed={failed}",
         status_code=303,
     )

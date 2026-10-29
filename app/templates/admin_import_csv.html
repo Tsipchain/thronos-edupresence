@@ -38,7 +38,7 @@
   <header>
     <span style="font-size:1.6rem">&#128196;</span>
     <h1>Εισαγωγή Μαθητών από Αρχείο</h1>
-    <a href="/admin?key={{ key }}" class="back">&#8592; Πίσω στο Admin</a>
+    <a href="/admin" class="back">&#8592; Πίσω στο Admin</a>
   </header>
 
   {% if result %}
@@ -52,7 +52,7 @@
       {% if result.skipped %} — Παραλείφθηκαν: {{ result.skipped|length }}{% endif %}
     </div>
     <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap">
-      <a href="/admin/class/{{ result.classroom_id }}?key={{ key }}" class="btn btn-green">
+      <a href="/admin/class/{{ result.classroom_id }}" class="btn btn-green">
         &#128222; Διαχείριση Τηλεφώνων
       </a>
       <a href="/classes/{{ result.classroom_id }}/attendance-dashboard" target="_blank" class="btn btn-blue">
@@ -76,7 +76,6 @@
   <div class="section">
     <h2>&#128196; Ανέβασμα Αρχείου</h2>
     <form method="POST" action="/admin/import/upload" enctype="multipart/form-data">
-      <input type="hidden" name="key" value="{{ key }}">
       <div class="grid2">
         <div>
           <label>Κόμβος (επιλέξτε υπάρχοντα)</label>
