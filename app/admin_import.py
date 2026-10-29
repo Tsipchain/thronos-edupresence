@@ -13,7 +13,8 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 
 def _check_admin_key(x_admin_key: str = Header(default="")) -> None:
-    if not x_admin_key or x_admin_key != settings.token_secret:
+    effective_key = settings.admin_api_key or settings.token_secret
+    if not x_admin_key or x_admin_key != effective_key:
         raise HTTPException(status_code=403, detail="Forbidden")
 
 

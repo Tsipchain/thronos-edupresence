@@ -18,7 +18,8 @@ templates = Jinja2Templates(directory="app/templates")
 
 
 def _key_ok(key: str) -> bool:
-    return bool(key) and key == settings.token_secret
+    effective_key = settings.admin_api_key or settings.token_secret
+    return bool(key) and key == effective_key
 
 
 # ---------------------------------------------------------------------------
