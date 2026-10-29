@@ -1,8 +1,18 @@
-"""Tenant/role isolation, admin session security, and L2E bridge tests."""
+"""Tenant/role isolation, admin session security, and L2E bridge tests.
+
+All L2E outbox tests use the DB-backed outbox — no in-memory state.
+All login tests confirm role/tenant derived from DB, never form params.
+"""
+import hashlib
 import json
 import time
+from datetime import datetime, timedelta
+from unittest.mock import patch, MagicMock
+
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
+
 from app.main import app
 from app.roles import (
     SUPER_ADMIN, TENANT_DIRECTOR, TEACHER, STUDENT,
@@ -10,8 +20,9 @@ from app.roles import (
 )
 from app.security import sign_payload
 from app.config import settings
-from app.admin_ui import _COOKIE
+from app.admin_ui import _COOKIE, _hash_key
 import app.admin_ui as admin_ui_module
+from app.models import AdminUser, L2EOutboxEntry
 
 
 @pytest.fixture
@@ -23,7 +34,7 @@ def _patch_admin_db(_fresh_db):
         try:
             yield s
         finally:
-            pass  # don't close — the fixture manages teardown
+            pass
     original = admin_ui_module.get_db
     admin_ui_module.get_db = _fake_get_db
     yield session_factory()
@@ -97,7 +108,7 @@ def test_admin_home_requires_session(client: TestClient):
     assert "admin_login" in resp.text or "κλειδί" in resp.text.lower()
 
 
-def test_admin_login_sets_httponly_cookie(client: TestClient):
+def test_admin_login_sets_httponly_cookie(client: TestClient, _patch_admin_db):
     effective_key = settings.admin_api_key or settings.token_secret
     resp = client.post("/admin", data={"key": effective_key}, follow_redirects=False)
     assert resp.status_code == 303
@@ -113,7 +124,7 @@ def test_admin_login_wrong_key_rejected(client: TestClient):
     assert "Λάθος" in resp.text
 
 
-def test_admin_key_not_in_redirect_urls(client: TestClient):
+def test_admin_key_not_in_redirect_urls(client: TestClient, _patch_admin_db):
     effective_key = settings.admin_api_key or settings.token_secret
     resp = client.post("/admin", data={"key": effective_key}, follow_redirects=False)
     location = resp.headers.get("location", "")
@@ -223,7 +234,9 @@ def test_director_role_allowed_import(client: TestClient, _patch_admin_db):
     client.cookies.clear()
 
 
-def test_login_with_role_param(client: TestClient):
+def test_form_role_param_ignored(client: TestClient, _patch_admin_db):
+    """Form-supplied role and tenant_id must NOT control the session.
+    Master key (no AdminUser record) → super_admin, no tenant."""
     effective_key = settings.admin_api_key or settings.token_secret
     resp = client.post("/admin",
         data={"key": effective_key, "role": TEACHER, "tenant_id": "42"},
@@ -232,6 +245,47 @@ def test_login_with_role_param(client: TestClient):
     assert resp.status_code == 303
     cookie_header = resp.headers.get("set-cookie", "")
     assert _COOKIE in cookie_header
+    from app.security import verify_token
+    import re
+    m = re.search(rf'{_COOKIE}=([^;]+)', cookie_header)
+    assert m
+    session_info = verify_token(m.group(1), expected_type="admin_session")
+    assert session_info["role"] == SUPER_ADMIN
+    assert session_info.get("tenant_id", "") == ""
+    client.cookies.clear()
+
+
+def test_login_with_admin_user_record(client: TestClient, _patch_admin_db):
+    """When an AdminUser record exists for the key, derive role/tenant from it."""
+    db_session = _patch_admin_db
+    from app.models import Node
+    node = Node(name="TestNode", municipality="TEST")
+    db_session.add(node)
+    db_session.flush()
+
+    key = "teacher-specific-key-12345"
+    admin_user = AdminUser(
+        username="teacher1",
+        api_key_hash=_hash_key(key),
+        role=TEACHER,
+        tenant_node_id=node.id,
+        is_active=True,
+    )
+    db_session.add(admin_user)
+    db_session.commit()
+
+    with patch.object(settings, "admin_api_key", ""), \
+         patch.object(settings, "token_secret", key):
+        resp = client.post("/admin", data={"key": key}, follow_redirects=False)
+        assert resp.status_code == 303
+        cookie_header = resp.headers.get("set-cookie", "")
+        import re
+        m = re.search(rf'{_COOKIE}=([^;]+)', cookie_header)
+        assert m
+        from app.security import verify_token
+        session_info = verify_token(m.group(1), expected_type="admin_session")
+    assert session_info["role"] == TEACHER
+    assert session_info["tenant_id"] == str(node.id)
     client.cookies.clear()
 
 
@@ -328,12 +382,12 @@ def test_super_admin_cross_tenant_allowed(client: TestClient, _patch_admin_db):
     assert "Other Student" in resp.text
 
 
-# ── L2E bridge: PII removal and outbox tests ────────────────────────────
+# ── L2E bridge: DB-backed outbox tests ────────────────────────────────────
 
 def test_pii_absent_from_bridge_payload():
     from app.l2e_bridge import (
-        L2EAttestationEvent, pseudonymous_student_ref,
-        deterministic_event_id, build_attestation_hash,
+        pseudonymous_student_ref, deterministic_event_id,
+        build_attestation_hash,
     )
     tenant = "test_tenant"
     stu_ref = pseudonymous_student_ref(tenant, 42, secret="test-secret")
@@ -343,15 +397,15 @@ def test_pii_absent_from_bridge_payload():
         "status": "present",
         "hours": 2,
     })
-    event_id = deterministic_event_id(tenant, stu_ref, 1700000000)
+    event_id = deterministic_event_id(tenant, "1", "lesson_5", 1, stu_ref)
 
-    event = L2EAttestationEvent(
-        event_id=event_id,
-        tenant_scope=tenant,
-        student_ref=stu_ref,
-        attestation_hash=att_hash,
-    )
-    d = json.dumps(event.__dict__)
+    payload = {
+        "event_id": event_id,
+        "tenant_scope": tenant,
+        "student_ref": stu_ref,
+        "attestation_hash": att_hash,
+    }
+    d = json.dumps(payload)
     for pii_field in ["tax_id", "full_name", "classroom_name", "program_name"]:
         assert pii_field not in d
 
@@ -367,123 +421,248 @@ def test_pseudonymous_student_ref_is_opaque():
 
 def test_deterministic_event_id_stable():
     from app.l2e_bridge import deterministic_event_id
-    id1 = deterministic_event_id("t1", "ref_abc", 1700000000)
-    id2 = deterministic_event_id("t1", "ref_abc", 1700000000)
+    id1 = deterministic_event_id("t1", "cls_1", "lesson_5", 1, "ref_abc")
+    id2 = deterministic_event_id("t1", "cls_1", "lesson_5", 1, "ref_abc")
     assert id1 == id2
     assert len(id1) == 32
-    id3 = deterministic_event_id("t1", "ref_abc", 1700000001)
+    id3 = deterministic_event_id("t1", "cls_1", "lesson_6", 1, "ref_abc")
     assert id3 != id1
 
 
-def test_duplicate_delivery_rejected(monkeypatch):
-    from app.l2e_bridge import (
-        L2EAttestationEvent, enqueue_attestation, reset_outbox,
-    )
+def test_event_id_no_time_component():
+    """Event ID must be stable across calls at different times — no timestamp."""
+    from app.l2e_bridge import deterministic_event_id
+    id1 = deterministic_event_id("t1", "cls_1", "lesson_5", 1, "ref_abc")
+    import time as _t
+    _t.sleep(0.01)
+    id2 = deterministic_event_id("t1", "cls_1", "lesson_5", 1, "ref_abc")
+    assert id1 == id2
+
+
+def test_duplicate_delivery_rejected(db_session: Session, monkeypatch):
+    from app.l2e_bridge import enqueue_attestation
     monkeypatch.setattr("app.l2e_bridge.settings.l2e_enabled", True)
-    reset_outbox()
 
-    event = L2EAttestationEvent(
-        event_id="evt_dup_001",
-        tenant_scope="t1",
-        student_ref="ref_aaa",
-        attestation_hash="hash_000",
+    ok1 = enqueue_attestation(
+        db_session, event_id="evt_dup_001", tenant_scope="t1",
+        student_ref="ref_aaa", attestation_hash="hash_000",
+        payload={"test": True},
     )
-    assert enqueue_attestation(event) is True
-    assert enqueue_attestation(event) is False
-    reset_outbox()
+    db_session.commit()
+    assert ok1 is True
 
-
-def test_retry_after_failure(monkeypatch):
-    from app.l2e_bridge import (
-        L2EAttestationEvent, enqueue_attestation, process_outbox,
-        reset_outbox, _outbox,
+    ok2 = enqueue_attestation(
+        db_session, event_id="evt_dup_001", tenant_scope="t1",
+        student_ref="ref_aaa", attestation_hash="hash_000",
+        payload={"test": True},
     )
+    assert ok2 is False
+
+
+def test_l2e_disabled_by_default(db_session: Session):
+    from app.l2e_bridge import enqueue_attestation
+    ok = enqueue_attestation(
+        db_session, event_id="evt_disabled_001", tenant_scope="t1",
+        student_ref="ref_ddd", attestation_hash="hash_333",
+        payload={"test": True},
+    )
+    assert ok is False
+
+
+def test_retry_after_failure(db_session: Session, monkeypatch):
+    from app.l2e_bridge import enqueue_attestation, process_outbox
     monkeypatch.setattr("app.l2e_bridge.settings.l2e_enabled", True)
-    reset_outbox()
+    monkeypatch.setattr("app.l2e_bridge.settings.l2e_base_url", "http://fake-l2e")
 
-    event = L2EAttestationEvent(
-        event_id="evt_retry_001",
-        tenant_scope="t1",
-        student_ref="ref_bbb",
-        attestation_hash="hash_111",
+    enqueue_attestation(
+        db_session, event_id="evt_retry_001", tenant_scope="t1",
+        student_ref="ref_bbb", attestation_hash="hash_111",
+        payload={"test": True}, max_retries=3,
     )
-    assert enqueue_attestation(event) is True
+    db_session.commit()
 
-    def failing_ack(entry):
-        raise ConnectionError("receiver down")
-
-    result = process_outbox(receiver_ack_fn=failing_ack, max_retries=3)
+    with patch("app.l2e_bridge.requests.post", side_effect=ConnectionError("down")):
+        result = process_outbox(db_session)
     assert result["delivered"] == 0
-    assert len(_outbox) == 1
-    assert _outbox[0]["_retries"] == 1
 
-    def succeeding_ack(entry):
-        return True
+    entry = db_session.query(L2EOutboxEntry).filter_by(event_id="evt_retry_001").one()
+    assert entry.retry_count == 1
+    assert entry.status == "pending"
 
-    result = process_outbox(receiver_ack_fn=succeeding_ack, max_retries=3)
+    entry.next_retry_at = None
+    db_session.commit()
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.text = '{"ok":true}'
+    with patch("app.l2e_bridge.requests.post", return_value=mock_resp):
+        result = process_outbox(db_session)
     assert result["delivered"] == 1
-    assert len(_outbox) == 0
-    reset_outbox()
+
+    entry = db_session.query(L2EOutboxEntry).filter_by(event_id="evt_retry_001").one()
+    assert entry.status == "delivered"
+    assert entry.receiver_ack == '{"ok":true}'
 
 
-def test_event_dedup_after_delivery(monkeypatch):
-    from app.l2e_bridge import (
-        L2EAttestationEvent, enqueue_attestation, process_outbox,
-        reset_outbox,
-    )
+def test_event_dedup_after_delivery(db_session: Session, monkeypatch):
+    from app.l2e_bridge import enqueue_attestation, process_outbox
     monkeypatch.setattr("app.l2e_bridge.settings.l2e_enabled", True)
-    reset_outbox()
+    monkeypatch.setattr("app.l2e_bridge.settings.l2e_base_url", "http://fake-l2e")
 
-    event = L2EAttestationEvent(
-        event_id="evt_dedup_001",
-        tenant_scope="t1",
-        student_ref="ref_ccc",
-        attestation_hash="hash_222",
+    enqueue_attestation(
+        db_session, event_id="evt_dedup_001", tenant_scope="t1",
+        student_ref="ref_ccc", attestation_hash="hash_222",
+        payload={"test": True},
     )
-    enqueue_attestation(event)
-    process_outbox(receiver_ack_fn=lambda e: True)
+    db_session.commit()
 
-    assert enqueue_attestation(event) is False
-    reset_outbox()
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.text = "ok"
+    with patch("app.l2e_bridge.requests.post", return_value=mock_resp):
+        process_outbox(db_session)
 
-
-def test_l2e_disabled_by_default():
-    from app.l2e_bridge import L2EAttestationEvent, enqueue_attestation, reset_outbox
-    reset_outbox()
-
-    event = L2EAttestationEvent(
-        event_id="evt_disabled_001",
-        tenant_scope="t1",
-        student_ref="ref_ddd",
-        attestation_hash="hash_333",
+    ok = enqueue_attestation(
+        db_session, event_id="evt_dedup_001", tenant_scope="t1",
+        student_ref="ref_ccc", attestation_hash="hash_222",
+        payload={"test": True},
     )
-    assert enqueue_attestation(event) is False
-    reset_outbox()
+    assert ok is False
 
 
-def test_outbox_max_retries_exhausted(monkeypatch):
-    from app.l2e_bridge import (
-        L2EAttestationEvent, enqueue_attestation, process_outbox,
-        reset_outbox, _outbox,
-    )
+def test_outbox_max_retries_exhausted(db_session: Session, monkeypatch):
+    from app.l2e_bridge import enqueue_attestation, process_outbox
     monkeypatch.setattr("app.l2e_bridge.settings.l2e_enabled", True)
-    reset_outbox()
+    monkeypatch.setattr("app.l2e_bridge.settings.l2e_base_url", "http://fake-l2e")
 
-    event = L2EAttestationEvent(
-        event_id="evt_exhaust_001",
-        tenant_scope="t1",
-        student_ref="ref_eee",
-        attestation_hash="hash_444",
+    enqueue_attestation(
+        db_session, event_id="evt_exhaust_001", tenant_scope="t1",
+        student_ref="ref_eee", attestation_hash="hash_444",
+        payload={"test": True}, max_retries=3,
     )
-    enqueue_attestation(event)
-
-    def failing(entry):
-        raise ConnectionError("still down")
+    db_session.commit()
 
     for _ in range(3):
-        process_outbox(receiver_ack_fn=failing, max_retries=3)
+        with patch("app.l2e_bridge.requests.post", side_effect=ConnectionError("down")):
+            process_outbox(db_session)
+        entry = db_session.query(L2EOutboxEntry).filter_by(event_id="evt_exhaust_001").one()
+        entry.next_retry_at = None
+        db_session.commit()
 
-    result = process_outbox(receiver_ack_fn=failing, max_retries=3)
+    with patch("app.l2e_bridge.requests.post", side_effect=ConnectionError("down")):
+        result = process_outbox(db_session)
     assert result["failed"] == 1
-    assert len(_outbox) == 0
-    reset_outbox()
+
+    entry = db_session.query(L2EOutboxEntry).filter_by(event_id="evt_exhaust_001").one()
+    assert entry.status == "failed"
+    assert entry.failure_reason == "max retries exceeded"
+
+
+def test_process_restart_preserves_outbox(db_session: Session, monkeypatch):
+    """After enqueue + simulated restart (new session), outbox entries survive."""
+    from app.l2e_bridge import enqueue_attestation, process_outbox
+    monkeypatch.setattr("app.l2e_bridge.settings.l2e_enabled", True)
+    monkeypatch.setattr("app.l2e_bridge.settings.l2e_base_url", "http://fake-l2e")
+
+    enqueue_attestation(
+        db_session, event_id="evt_restart_001", tenant_scope="t1",
+        student_ref="ref_restart", attestation_hash="hash_restart",
+        payload={"restart_test": True},
+    )
+    db_session.commit()
+
+    db_session.expire_all()
+
+    entry = db_session.query(L2EOutboxEntry).filter_by(event_id="evt_restart_001").one()
+    assert entry.status == "pending"
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.text = "ack"
+    with patch("app.l2e_bridge.requests.post", return_value=mock_resp):
+        result = process_outbox(db_session)
+    assert result["delivered"] == 1
+
+
+def test_duplicate_close(db_session: Session, monkeypatch):
+    """Double-delivering the same event_id must be idempotent."""
+    from app.l2e_bridge import enqueue_attestation
+    monkeypatch.setattr("app.l2e_bridge.settings.l2e_enabled", True)
+
+    ok1 = enqueue_attestation(
+        db_session, event_id="evt_dclose_001", tenant_scope="t1",
+        student_ref="ref_dc", attestation_hash="hash_dc",
+        payload={"dc": True},
+    )
+    db_session.commit()
+    assert ok1 is True
+
+    ok2 = enqueue_attestation(
+        db_session, event_id="evt_dclose_001", tenant_scope="t1",
+        student_ref="ref_dc", attestation_hash="hash_dc",
+        payload={"dc": True},
+    )
+    assert ok2 is False
+
+    count = db_session.query(L2EOutboxEntry).filter_by(event_id="evt_dclose_001").count()
+    assert count == 1
+
+
+def test_receiver_timeout(db_session: Session, monkeypatch):
+    """A request timeout counts as a retriable failure, not terminal."""
+    import requests as _req
+    from app.l2e_bridge import enqueue_attestation, process_outbox
+    monkeypatch.setattr("app.l2e_bridge.settings.l2e_enabled", True)
+    monkeypatch.setattr("app.l2e_bridge.settings.l2e_base_url", "http://fake-l2e")
+
+    enqueue_attestation(
+        db_session, event_id="evt_timeout_001", tenant_scope="t1",
+        student_ref="ref_to", attestation_hash="hash_to",
+        payload={"to": True}, max_retries=3,
+    )
+    db_session.commit()
+
+    with patch("app.l2e_bridge.requests.post",
+               side_effect=_req.exceptions.Timeout("timed out")):
+        result = process_outbox(db_session)
+
+    entry = db_session.query(L2EOutboxEntry).filter_by(event_id="evt_timeout_001").one()
+    assert entry.status == "pending"
+    assert entry.retry_count == 1
+    assert "timed out" in entry.failure_reason
+
+
+def test_duplicate_acknowledgement(db_session: Session, monkeypatch):
+    """Processing an already-delivered entry must not re-deliver."""
+    from app.l2e_bridge import enqueue_attestation, process_outbox
+    monkeypatch.setattr("app.l2e_bridge.settings.l2e_enabled", True)
+    monkeypatch.setattr("app.l2e_bridge.settings.l2e_base_url", "http://fake-l2e")
+
+    enqueue_attestation(
+        db_session, event_id="evt_dupack_001", tenant_scope="t1",
+        student_ref="ref_da", attestation_hash="hash_da",
+        payload={"da": True},
+    )
+    db_session.commit()
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.text = "ok"
+    with patch("app.l2e_bridge.requests.post", return_value=mock_resp) as mock_post:
+        process_outbox(db_session)
+        assert mock_post.call_count == 1
+
+    with patch("app.l2e_bridge.requests.post", return_value=mock_resp) as mock_post2:
+        result = process_outbox(db_session)
+        assert mock_post2.call_count == 0
+    assert result["delivered"] == 0
+
+
+def test_no_direct_post_on_report(monkeypatch):
+    """report_lesson_attendance must not call requests.post directly."""
+    import inspect
+    from app import l2e_bridge
+    src = inspect.getsource(l2e_bridge.report_lesson_attendance)
+    assert "requests.post" not in src
+    src2 = inspect.getsource(l2e_bridge.report_course_completion)
+    assert "requests.post" not in src2

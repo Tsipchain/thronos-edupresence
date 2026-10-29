@@ -1,5 +1,6 @@
 from __future__ import annotations
 import csv
+import hashlib
 import io
 import time
 from typing import Annotated
@@ -10,7 +11,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session, joinedload
 from app.config import settings
 from app.db import get_db
-from app.models import Classroom, Enrollment, Node, Student, now_utc
+from app.models import AdminUser, Classroom, Enrollment, Node, Student, now_utc
 from app.attestation import write_audit
 from app.security import sign_payload, verify_token
 from app.sms import send_sms
@@ -23,6 +24,10 @@ templates = Jinja2Templates(directory="app/templates")
 
 _COOKIE = settings.session_cookie_name or "thronos_admin"
 _TTL = settings.session_ttl_hours * 3600
+
+
+def _hash_key(key: str) -> str:
+    return hashlib.sha256(key.encode()).hexdigest()
 
 
 def _key_ok(key: str) -> bool:
@@ -121,17 +126,28 @@ def admin_home(request: Request, msg: str = ""):
 
 
 @router.post("", response_class=HTMLResponse)
-def admin_login(request: Request, key: str = Form(""),
-                role: str = Form(""), tenant_id: str = Form("")):
+def admin_login(request: Request, key: str = Form("")):
     if not _key_ok(key):
         return templates.TemplateResponse(request, "admin_login.html",
             {"request": request, "error": "Λάθος κλειδί Admin."})
-    effective_role = role.strip() if role.strip() in (
-        SUPER_ADMIN, TENANT_DIRECTOR, TEACHER, STUDENT
-    ) else SUPER_ADMIN
+    db = next(get_db())
+    try:
+        admin_user = db.query(AdminUser).filter(
+            AdminUser.api_key_hash == _hash_key(key),
+            AdminUser.is_active == True,
+        ).first()
+    finally:
+        db.close()
+    if admin_user:
+        effective_role = admin_user.role if admin_user.role in (
+            SUPER_ADMIN, TENANT_DIRECTOR, TEACHER, STUDENT
+        ) else STUDENT
+        tenant_id = str(admin_user.tenant_node_id) if admin_user.tenant_node_id else ""
+    else:
+        effective_role = SUPER_ADMIN
+        tenant_id = ""
     response = RedirectResponse("/admin", status_code=303)
-    _set_session_cookie(response, role=effective_role,
-                        tenant_id=tenant_id.strip())
+    _set_session_cookie(response, role=effective_role, tenant_id=tenant_id)
     return response
 
 
