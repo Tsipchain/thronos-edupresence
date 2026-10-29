@@ -18,6 +18,8 @@ templates = Jinja2Templates(directory="app/templates")
 
 
 def _key_ok(key: str) -> bool:
+    if settings.environment == "production" and not settings.admin_api_key:
+        return False
     effective_key = settings.admin_api_key or settings.token_secret
     return bool(key) and key == effective_key
 
@@ -30,21 +32,21 @@ def _key_ok(key: str) -> bool:
 @router.get("/", response_class=HTMLResponse)
 def admin_home(request: Request, key: str = "", msg: str = ""):
     if not key or not _key_ok(key):
-        return templates.TemplateResponse("admin_login.html",
+        return templates.TemplateResponse(request, "admin_login.html",
             {"request": request, "error": "Λάθος κλειδί." if (key and not _key_ok(key)) else ""})
     db = next(get_db())
     nodes = db.query(Node).options(
         joinedload(Node.classrooms).joinedload(Classroom.enrollments),
     ).order_by(Node.id).all()
     db.close()
-    return templates.TemplateResponse("admin_home.html",
+    return templates.TemplateResponse(request, "admin_home.html",
         {"request": request, "key": key, "nodes": nodes, "msg": msg})
 
 
 @router.post("", response_class=HTMLResponse)
 def admin_login(request: Request, key: str = Form("")):
     if not _key_ok(key):
-        return templates.TemplateResponse("admin_login.html",
+        return templates.TemplateResponse(request, "admin_login.html",
             {"request": request, "error": "Λάθος κλειδί Admin."})
     return RedirectResponse(f"/admin?key={key}", status_code=303)
 
@@ -91,7 +93,7 @@ def import_page(request: Request, key: str = ""):
     db = next(get_db())
     nodes = db.query(Node).order_by(Node.name).all()
     db.close()
-    return templates.TemplateResponse("admin_import_csv.html",
+    return templates.TemplateResponse(request, "admin_import_csv.html",
         {"request": request, "key": key, "nodes": nodes, "result": None})
 
 
@@ -132,7 +134,7 @@ async def import_upload(
 
     if not node:
         nodes = db.query(Node).order_by(Node.name).all()
-        return templates.TemplateResponse("admin_import_csv.html", {
+        return templates.TemplateResponse(request, "admin_import_csv.html", {
             "request": request, "key": key, "nodes": nodes,
             "result": {"error": "Επιλέξτε ή δημιουργήστε κόμβο."},
         })
@@ -156,13 +158,13 @@ async def import_upload(
                 rows.append(dict(zip(headers, [str(v or "").strip() for v in row])))
         else:
             nodes = db.query(Node).order_by(Node.name).all()
-            return templates.TemplateResponse("admin_import_csv.html", {
+            return templates.TemplateResponse(request, "admin_import_csv.html", {
                 "request": request, "key": key, "nodes": nodes,
                 "result": {"error": "Αποδεκτοί μόνο .csv και .xlsx"},
             })
     except Exception as exc:
         nodes = db.query(Node).order_by(Node.name).all()
-        return templates.TemplateResponse("admin_import_csv.html", {
+        return templates.TemplateResponse(request, "admin_import_csv.html", {
             "request": request, "key": key, "nodes": nodes,
             "result": {"error": f"Σφάλμα ανάγνωσης αρχείου: {exc}"},
         })
@@ -215,7 +217,7 @@ async def import_upload(
     write_audit(db, "admin_csv_import", "classroom", classroom.id,
                 actor="admin", detail={"created": len(created), "skipped": len(skipped)})
 
-    return templates.TemplateResponse("admin_import_csv.html", {
+    return templates.TemplateResponse(request, "admin_import_csv.html", {
         "request": request, "key": key,
         "nodes": db.query(Node).order_by(Node.name).all(),
         "result": {
@@ -252,7 +254,7 @@ def admin_class(
         [e for e in classroom.enrollments if e.status == "active"],
         key=lambda e: e.student.full_name or "",
     )
-    return templates.TemplateResponse("admin_phones.html", {
+    return templates.TemplateResponse(request, "admin_phones.html", {
         "request": request, "key": key, "classroom": classroom,
         "enrollments": enrollments,
         "sms_sent": sms_sent, "sms_failed": sms_failed, "saved": saved,

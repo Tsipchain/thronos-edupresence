@@ -160,7 +160,7 @@ def render(request: Request, name: str, context: dict) -> HTMLResponse:
         "teaching_hours_done": teaching_hours_done, "completion_percent": completion_percent,
     }
     base.update(context)
-    return templates.TemplateResponse(name, base)
+    return templates.TemplateResponse(request, name, base)
 
 
 # ---------------------------------------------------------------------------
