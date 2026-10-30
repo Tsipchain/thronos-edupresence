@@ -366,6 +366,8 @@ class AdminUser(Base):
     api_key_hash: Mapped[str] = mapped_column(String(128), nullable=False)
     role: Mapped[str] = mapped_column(String(40), default="student")
     tenant_node_id: Mapped[int | None] = mapped_column(ForeignKey("nodes.id"), nullable=True)
+    student_id: Mapped[int | None] = mapped_column(ForeignKey("students.id"), nullable=True)
+    thr_wallet: Mapped[str] = mapped_column(String(120), default="")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
 

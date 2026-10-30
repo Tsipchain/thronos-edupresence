@@ -2,6 +2,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
+import secrets
 import time
 from typing import Annotated
 from fastapi import Depends, File, Form, Request, UploadFile
@@ -23,6 +24,7 @@ router = APIRouter(prefix="/admin", tags=["admin-ui"])
 templates = Jinja2Templates(directory="app/templates")
 
 _COOKIE = settings.session_cookie_name or "thronos_admin"
+_CSRF_COOKIE = "thronos_csrf"
 _TTL = settings.session_ttl_hours * 3600
 
 
@@ -77,8 +79,17 @@ def _enforce_tenant(session_info: dict, node_id: int | None, db: Session) -> Res
     return None
 
 
+def _verify_csrf(request: Request, csrf_token: str) -> bool:
+    """Double-submit cookie CSRF: form value must match cookie."""
+    cookie_val = request.cookies.get(_CSRF_COOKIE, "")
+    if not cookie_val or not csrf_token:
+        return False
+    return secrets.compare_digest(cookie_val, csrf_token)
+
+
 def _set_session_cookie(response: Response, role: str = SUPER_ADMIN,
-                        tenant_id: str = "") -> Response:
+                        tenant_id: str = "", student_id: int | None = None,
+                        thr_wallet: str = "") -> Response:
     payload = {
         "typ": "admin_session",
         "role": role,
@@ -87,6 +98,10 @@ def _set_session_cookie(response: Response, role: str = SUPER_ADMIN,
     }
     if tenant_id:
         payload["tenant_id"] = tenant_id
+    if student_id:
+        payload["student_id"] = student_id
+    if thr_wallet:
+        payload["thr_wallet"] = thr_wallet
     token = sign_payload(payload)
     response.set_cookie(
         key=_COOKIE,
@@ -97,11 +112,22 @@ def _set_session_cookie(response: Response, role: str = SUPER_ADMIN,
         max_age=_TTL,
         path="/",
     )
+    csrf = secrets.token_hex(16)
+    response.set_cookie(
+        key=_CSRF_COOKIE,
+        value=csrf,
+        httponly=False,
+        secure=settings.environment == "production",
+        samesite="strict",
+        max_age=_TTL,
+        path="/",
+    )
     return response
 
 
 def _clear_session_cookie(response: Response) -> Response:
     response.delete_cookie(key=_COOKIE, path="/")
+    response.delete_cookie(key=_CSRF_COOKIE, path="/")
     return response
 
 
@@ -143,11 +169,16 @@ def admin_login(request: Request, key: str = Form("")):
             SUPER_ADMIN, TENANT_DIRECTOR, TEACHER, STUDENT
         ) else STUDENT
         tenant_id = str(admin_user.tenant_node_id) if admin_user.tenant_node_id else ""
+        student_id = admin_user.student_id
+        thr_wallet = admin_user.thr_wallet or ""
     else:
         effective_role = SUPER_ADMIN
         tenant_id = ""
+        student_id = None
+        thr_wallet = ""
     response = RedirectResponse("/admin", status_code=303)
-    _set_session_cookie(response, role=effective_role, tenant_id=tenant_id)
+    _set_session_cookie(response, role=effective_role, tenant_id=tenant_id,
+                        student_id=student_id, thr_wallet=thr_wallet)
     return response
 
 
