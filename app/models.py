@@ -357,3 +357,37 @@ class LiveSession(Base):
 
     course = relationship("Course", back_populates="live_sessions")
     lesson = relationship("Lesson")
+
+
+class AdminUser(Base):
+    __tablename__ = "admin_users"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    username: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    api_key_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    role: Mapped[str] = mapped_column(String(40), default="student")
+    tenant_node_id: Mapped[int | None] = mapped_column(ForeignKey("nodes.id"), nullable=True)
+    student_id: Mapped[int | None] = mapped_column(ForeignKey("students.id"), nullable=True)
+    thr_wallet: Mapped[str] = mapped_column(String(120), default="")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+
+class L2EOutboxEntry(Base):
+    __tablename__ = "l2e_outbox"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    tenant_scope: Mapped[str] = mapped_column(String(120), nullable=False)
+    student_ref: Mapped[str] = mapped_column(String(64), nullable=False)
+    attestation_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    attestation_version: Mapped[int] = mapped_column(Integer, default=1)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="pending")
+    retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    max_retries: Mapped[int] = mapped_column(Integer, default=3)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    receiver_ack: Mapped[str] = mapped_column(String(200), default="")
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    failed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    failure_reason: Mapped[str] = mapped_column(String(500), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)

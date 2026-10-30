@@ -82,7 +82,7 @@ function showTab(id){
         <p>{{ node.classrooms|length }} τμήματα</p>
         <div class="cls-list">
           {% for cls in node.classrooms %}
-          <a href="/admin/class/{{ cls.id }}?key={{ key }}" class="cls-chip">
+          <a href="/admin/class/{{ cls.id }}" class="cls-chip">
             {{ cls.name }}
             <span style="color:#64748b">({{ cls.enrollments|selectattr('status','eq','active')|list|length }} μ.)</span>
           </a>
@@ -101,7 +101,6 @@ function showTab(id){
     <div class="section">
       <h2>&#128196; Εισαγωγή Μαθητών από CSV / Excel</h2>
       <form method="POST" action="/admin/import/upload" enctype="multipart/form-data">
-        <input type="hidden" name="key" value="{{ key }}">
         <div class="grid2">
           <div>
             <label>Κόμβος (&#x2193; επιλέξτε υπάρχοντα ή γράψτε νέο)</label>
@@ -151,7 +150,6 @@ function showTab(id){
     <div class="section">
       <h2>&#127970; Δημιουργία Νέου Κόμβου</h2>
       <form method="POST" action="/admin/nodes/create">
-        <input type="hidden" name="key" value="{{ key }}">
         <label>Όνομα Κόμβου</label>
         <input type="text" name="name" placeholder="π.χ. 2ο ΚΑΠΗ Δήμου Θεσσαλονίκης" required>
         <label>Δήμος / Φορέας</label>

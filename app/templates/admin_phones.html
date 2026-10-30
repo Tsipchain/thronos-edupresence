@@ -47,7 +47,7 @@
 <div class="container">
   <header>
     <h1>&#128100; {{ classroom.name }}</h1>
-    <a href="/admin?key={{ key }}" class="back">&#8592; Πίσω</a>
+    <a href="/admin" class="back">&#8592; Πίσω</a>
   </header>
 
   {% if saved %}
@@ -63,7 +63,6 @@
 
   <!-- Phone Numbers -->
   <form method="POST" action="/admin/class/{{ classroom.id }}/update-phones">
-    <input type="hidden" name="key" value="{{ key }}">
     <div class="section">
       <h2>&#128222; Τηλέφωνα Μαθητών</h2>
       {% if enrollments %}
@@ -112,7 +111,6 @@
   <!-- Bulk SMS -->
   {% if enrollments %}
   <form method="POST" action="/admin/class/{{ classroom.id }}/send-sms">
-    <input type="hidden" name="key" value="{{ key }}">
     <div class="section">
       <h2>&#128141; Μαζική Αποστολή SMS</h2>
       <label style="color:#94a3b8;font-size:.85rem;display:block;margin-bottom:6px;font-weight:600">Μήνυμα</label>

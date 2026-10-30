@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     mock_user_role: str = "teacher"
 
     token_secret: str = "change-me-use-a-long-random-secret"
+    admin_api_key: str = ""
     token_issuer: str = "thronos-edupresence"
     session_ttl_hours: int = 24
     session_cookie_name: str = "thronos_session"
@@ -37,6 +38,7 @@ class Settings(BaseSettings):
 
     viber_bot_token: str = ""
     viber_sender_name: str = "ThrEDU"
+    viber_min_api_version: int = 1
 
     telesign_customer_id: str = ""
     telesign_api_key: str = ""
