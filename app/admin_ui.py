@@ -95,13 +95,13 @@ def _set_session_cookie(response: Response, role: str = SUPER_ADMIN,
         secure=settings.environment == "production",
         samesite="lax",
         max_age=_TTL,
-        path="/admin",
+        path="/",
     )
     return response
 
 
 def _clear_session_cookie(response: Response) -> Response:
-    response.delete_cookie(key=_COOKIE, path="/admin")
+    response.delete_cookie(key=_COOKIE, path="/")
     return response
 
 

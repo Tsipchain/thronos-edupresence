@@ -23,6 +23,8 @@ from app.models import (
     Assignment, Certificate, Classroom, Course, Enrollment, Grade,
     LiveSession, Node, Student, Submission, University, now_utc,
 )
+from app.admin_ui import _admin_session, _require_role
+from app.roles import SUPER_ADMIN, TENANT_DIRECTOR, TEACHER, STUDENT
 
 router = APIRouter(prefix="/uni", tags=["university"])
 
@@ -67,6 +69,9 @@ def university_list(request: Request, db: Annotated[Session, Depends(get_db)]):
 def create_university(request: Request, db: Annotated[Session, Depends(get_db)],
                       name: str = Form(...), slug: str = Form(""),
                       domain: str = Form(""), contact_email: str = Form("")):
+    session_info, err = _require_role(request, SUPER_ADMIN)
+    if err:
+        raise HTTPException(403, "Forbidden: super_admin role required")
     if not slug.strip():
         slug = name.strip().lower().replace(" ", "-")[:120]
     existing = db.query(University).filter(University.slug == slug).first()
@@ -103,6 +108,9 @@ def create_course(request: Request, uni_id: int, db: Annotated[Session, Depends(
                   semester: str = Form(""), credits: int = Form(0),
                   teacher_name: str = Form(""), teacher_email: str = Form(""),
                   max_students: int = Form(100), pass_grade: float = Form(5.0)):
+    session_info, err = _require_role(request, TEACHER)
+    if err:
+        raise HTTPException(403, "Forbidden: teacher role required")
     uni = db.get(University, uni_id)
     if not uni:
         raise HTTPException(404, "University not found")
@@ -161,6 +169,9 @@ def course_detail(request: Request, uni_id: int, course_id: int,
 def enroll_student_course(request: Request, uni_id: int, course_id: int,
                           db: Annotated[Session, Depends(get_db)],
                           student_id: int = Form(...)):
+    session_info, err = _require_role(request, TEACHER)
+    if err:
+        raise HTTPException(403, "Forbidden: teacher role required")
     course = db.query(Course).filter(Course.id == course_id, Course.university_id == uni_id).first()
     if not course or not course.classroom_id:
         raise HTTPException(404, "Course not found")
@@ -186,6 +197,9 @@ def create_assignment(request: Request, uni_id: int, course_id: int,
                       assignment_type: str = Form("homework"), max_score: float = Form(100),
                       weight: float = Form(1.0), due_at: str = Form(""),
                       lock_on_chain: bool = Form(False)):
+    session_info, err = _require_role(request, TEACHER)
+    if err:
+        raise HTTPException(403, "Forbidden: teacher role required")
     course = db.query(Course).filter(Course.id == course_id, Course.university_id == uni_id).first()
     if not course:
         raise HTTPException(404, "Course not found")
@@ -233,6 +247,9 @@ def submit_assignment(request: Request, uni_id: int, course_id: int, assign_id: 
                       db: Annotated[Session, Depends(get_db)],
                       student_id: int = Form(...), content: str = Form(""),
                       file_url: str = Form("")):
+    session_info, err = _require_role(request, STUDENT)
+    if err:
+        raise HTTPException(403, "Forbidden: authentication required")
     assignment = db.query(Assignment).options(
         joinedload(Assignment.course),
     ).filter(Assignment.id == assign_id, Assignment.course_id == course_id).first()
@@ -270,6 +287,9 @@ def grade_submission(request: Request, uni_id: int, course_id: int, assign_id: i
                      db: Annotated[Session, Depends(get_db)],
                      submission_id: int = Form(...), score: float = Form(...),
                      feedback: str = Form("")):
+    session_info, err = _require_role(request, TEACHER)
+    if err:
+        raise HTTPException(403, "Forbidden: teacher role required")
     sub = db.query(Submission).options(
         joinedload(Submission.assignment).joinedload(Assignment.course),
     ).filter(Submission.id == submission_id, Submission.assignment_id == assign_id).first()
@@ -306,6 +326,9 @@ def grade_submission(request: Request, uni_id: int, course_id: int, assign_id: i
 @router.post("/{uni_id}/courses/{course_id}/grades/compute")
 def compute_final_grades(request: Request, uni_id: int, course_id: int,
                          db: Annotated[Session, Depends(get_db)]):
+    session_info, err = _require_role(request, TEACHER)
+    if err:
+        raise HTTPException(403, "Forbidden: teacher role required")
     course = db.query(Course).options(
         joinedload(Course.assignments).joinedload(Assignment.submissions),
         joinedload(Course.classroom).joinedload(Classroom.enrollments).joinedload(Enrollment.student),
@@ -353,6 +376,9 @@ def compute_final_grades(request: Request, uni_id: int, course_id: int,
 @router.post("/{uni_id}/courses/{course_id}/grades/lock")
 def lock_grades_on_chain(request: Request, uni_id: int, course_id: int,
                          db: Annotated[Session, Depends(get_db)]):
+    session_info, err = _require_role(request, TEACHER)
+    if err:
+        raise HTTPException(403, "Forbidden: teacher role required")
     course = db.query(Course).options(
         joinedload(Course.grades).joinedload(Grade.student),
         joinedload(Course.university),
@@ -392,6 +418,9 @@ def lock_grades_on_chain(request: Request, uni_id: int, course_id: int,
 @router.post("/{uni_id}/courses/{course_id}/certificates/issue")
 def issue_certificates(request: Request, uni_id: int, course_id: int,
                        db: Annotated[Session, Depends(get_db)]):
+    session_info, err = _require_role(request, TEACHER)
+    if err:
+        raise HTTPException(403, "Forbidden: teacher role required")
     course = db.query(Course).options(
         joinedload(Course.grades).joinedload(Grade.student),
         joinedload(Course.university),
@@ -456,6 +485,9 @@ def create_live_session(request: Request, uni_id: int, course_id: int,
                         title: str = Form("Live Classroom"),
                         scheduled_at: str = Form(""),
                         duration_minutes: int = Form(90)):
+    session_info, err = _require_role(request, TEACHER)
+    if err:
+        raise HTTPException(403, "Forbidden: teacher role required")
     course = db.query(Course).filter(Course.id == course_id, Course.university_id == uni_id).first()
     if not course:
         raise HTTPException(404, "Course not found")
@@ -492,6 +524,9 @@ def join_live_session(request: Request, uni_id: int, course_id: int, room_id: st
 @router.post("/{uni_id}/courses/{course_id}/live/{session_id}/start")
 def start_live_session(request: Request, uni_id: int, course_id: int, session_id: int,
                        db: Annotated[Session, Depends(get_db)]):
+    session_info, err = _require_role(request, TEACHER)
+    if err:
+        raise HTTPException(403, "Forbidden: teacher role required")
     ls = db.query(LiveSession).options(
         joinedload(LiveSession.course),
     ).filter(LiveSession.id == session_id, LiveSession.course_id == course_id).first()
@@ -506,6 +541,9 @@ def start_live_session(request: Request, uni_id: int, course_id: int, session_id
 @router.post("/{uni_id}/courses/{course_id}/live/{session_id}/end")
 def end_live_session(request: Request, uni_id: int, course_id: int, session_id: int,
                      db: Annotated[Session, Depends(get_db)]):
+    session_info, err = _require_role(request, TEACHER)
+    if err:
+        raise HTTPException(403, "Forbidden: teacher role required")
     ls = db.query(LiveSession).options(
         joinedload(LiveSession.course),
     ).filter(LiveSession.id == session_id, LiveSession.course_id == course_id).first()
