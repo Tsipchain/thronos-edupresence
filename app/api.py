@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.config import settings
 from app.db import get_db
 from app.models import (
-    Attendance, Classroom, Course, Enrollment, Grade, Lesson,
+    Attendance, Classroom, Course, Enrollment, Grade, L2EOutboxEntry, Lesson,
     Node, Student, University,
 )
 from app.security import hash_identity
@@ -215,4 +215,53 @@ def course_grades_summary(course_id: int, db: Annotated[Session, Depends(get_db)
         "total_failed": sum(1 for g in scored if not g.passed),
         "average_score": round(sum(g.final_score for g in scored) / len(scored), 2) if scored else None,
         "assignments_count": len(course.assignments),
+    }
+
+
+# ─── L2E Outbox monitoring ─────────────────────────────────────────────────
+
+@router.get("/l2e/outbox/status", dependencies=[Depends(_require_api_key)])
+def l2e_outbox_status(db: Annotated[Session, Depends(get_db)]):
+    from sqlalchemy import func
+    counts = (
+        db.query(L2EOutboxEntry.status, func.count(L2EOutboxEntry.id))
+        .group_by(L2EOutboxEntry.status)
+        .all()
+    )
+    by_status = {s: c for s, c in counts}
+    total = sum(by_status.values())
+    return {
+        "l2e_enabled": settings.l2e_enabled,
+        "total": total,
+        "pending": by_status.get("pending", 0),
+        "delivered": by_status.get("delivered", 0),
+        "failed": by_status.get("failed", 0),
+    }
+
+
+@router.get("/l2e/outbox/failed", dependencies=[Depends(_require_api_key)])
+def l2e_outbox_failed(
+    db: Annotated[Session, Depends(get_db)],
+    limit: int = 20,
+):
+    entries = (
+        db.query(L2EOutboxEntry)
+        .filter(L2EOutboxEntry.status == "failed")
+        .order_by(L2EOutboxEntry.failed_at.desc())
+        .limit(min(limit, 100))
+        .all()
+    )
+    return {
+        "count": len(entries),
+        "entries": [
+            {
+                "event_id": e.event_id,
+                "tenant_scope": e.tenant_scope,
+                "retry_count": e.retry_count,
+                "failure_reason": e.failure_reason,
+                "created_at": str(e.created_at) if e.created_at else None,
+                "failed_at": str(e.failed_at) if e.failed_at else None,
+            }
+            for e in entries
+        ],
     }

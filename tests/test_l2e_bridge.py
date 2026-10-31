@@ -200,6 +200,36 @@ class TestResetOutbox:
             assert db_session.query(L2EOutboxEntry).count() == 0
 
 
+class TestOutboxStatusEndpoint:
+    def test_outbox_status_no_key(self, client):
+        resp = client.get("/api/v1/l2e/outbox/status")
+        assert resp.status_code == 422 or resp.status_code == 401
+
+    def test_outbox_status_bad_key(self, client):
+        resp = client.get("/api/v1/l2e/outbox/status", headers={"X-Api-Key": "wrong"})
+        assert resp.status_code == 401
+
+    def test_outbox_status_ok(self, client, db_session):
+        with patch("app.api.settings") as mock_s:
+            mock_s.l2e_api_key = "test-key"
+            mock_s.l2e_enabled = False
+            resp = client.get("/api/v1/l2e/outbox/status", headers={"X-Api-Key": "test-key"})
+            assert resp.status_code == 200
+            data = resp.json()
+            assert "total" in data
+            assert "pending" in data
+            assert "delivered" in data
+            assert "failed" in data
+            assert data["l2e_enabled"] is False
+
+    def test_outbox_failed_empty(self, client):
+        with patch("app.api.settings") as mock_s:
+            mock_s.l2e_api_key = "test-key"
+            resp = client.get("/api/v1/l2e/outbox/failed", headers={"X-Api-Key": "test-key"})
+            assert resp.status_code == 200
+            assert resp.json()["count"] == 0
+
+
 class TestNoPiiLeakage:
     def test_payload_has_no_pii_fields(self):
         ref = pseudonymous_student_ref("tenant", 42, secret="key")
