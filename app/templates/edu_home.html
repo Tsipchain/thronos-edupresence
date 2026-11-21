@@ -50,7 +50,7 @@
       <h3>{{ course.title }}</h3>
       {% if course.code %}<p>{{ course.code }}</p>{% endif %}
       <p>{{ course.description|truncate(145) if course.description else 'Δείτε τον κατάλογο για περισσότερες πληροφορίες.' }}</p>
-      <p><a class="edu-link" href="/learn/courses">Στοιχεία μαθήματος</a></p>
+      <p><a class="edu-link" href="/learn/courses/{{ course.id }}">Στοιχεία μαθήματος</a></p>
     </article>
     {% endfor %}
   </div>

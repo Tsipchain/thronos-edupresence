@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db import Base
 
@@ -391,3 +391,79 @@ class L2EOutboxEntry(Base):
     failed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     failure_reason: Mapped[str] = mapped_column(String(500), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+
+# ---------------------------------------------------------------------------
+# LMS: Course Enrollment, Modules, Progress, Quizzes
+# ---------------------------------------------------------------------------
+
+class CourseEnrollment(Base):
+    __tablename__ = "course_enrollments"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"), nullable=False)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(40), default="active")
+    enrolled_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    course = relationship("Course")
+    student = relationship("Student")
+    __table_args__ = (UniqueConstraint("course_id", "student_id", name="uq_course_student"),)
+
+
+class CourseModule(Base):
+    __tablename__ = "course_modules"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"), nullable=False)
+    title: Mapped[str] = mapped_column(String(250), nullable=False)
+    content: Mapped[str] = mapped_column(Text, default="")
+    module_type: Mapped[str] = mapped_column(String(40), default="lesson")
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+    duration_minutes: Mapped[int] = mapped_column(Integer, default=30)
+    is_published: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+    course = relationship("Course")
+
+
+class ModuleProgress(Base):
+    __tablename__ = "module_progress"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    module_id: Mapped[int] = mapped_column(ForeignKey("course_modules.id"), nullable=False)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), nullable=False)
+    completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    module = relationship("CourseModule")
+    student = relationship("Student")
+    __table_args__ = (UniqueConstraint("module_id", "student_id", name="uq_module_student"),)
+
+
+class QuizQuestion(Base):
+    __tablename__ = "quiz_questions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    assignment_id: Mapped[int] = mapped_column(ForeignKey("assignments.id"), nullable=False)
+    question_text: Mapped[str] = mapped_column(Text, nullable=False)
+    question_type: Mapped[str] = mapped_column(String(40), default="multiple_choice")
+    options_json: Mapped[str] = mapped_column(Text, default="[]")
+    correct_index: Mapped[int] = mapped_column(Integer, default=0)
+    points: Mapped[float] = mapped_column(Float, default=1.0)
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+
+    assignment = relationship("Assignment")
+
+
+class QuizAttempt(Base):
+    __tablename__ = "quiz_attempts"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    assignment_id: Mapped[int] = mapped_column(ForeignKey("assignments.id"), nullable=False)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), nullable=False)
+    answers_json: Mapped[str] = mapped_column(Text, default="{}")
+    score: Mapped[float] = mapped_column(Float, default=0.0)
+    max_score: Mapped[float] = mapped_column(Float, default=0.0)
+    passed: Mapped[bool] = mapped_column(Boolean, default=False)
+    attempt_number: Mapped[int] = mapped_column(Integer, default=1)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+    assignment = relationship("Assignment")
+    student = relationship("Student")

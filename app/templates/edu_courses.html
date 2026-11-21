@@ -16,7 +16,7 @@
         <h3>{{ course.title }}</h3>
         {% if course.code %}<p>Κωδικός: {{ course.code }}</p>{% endif %}
         {% if course.description %}<p>{{ course.description|truncate(220) }}</p>{% endif %}
-        <p>Η εγγραφή ανοίγει μετά την ενεργοποίηση της επαληθευμένης student identity και της ασφαλούς enrollment διαδικασίας.</p>
+        <p><a class="edu-link" href="/learn/courses/{{ course.id }}">Λεπτομέρειες & Εγγραφή</a></p>
       </article>
       {% endfor %}
     </div>

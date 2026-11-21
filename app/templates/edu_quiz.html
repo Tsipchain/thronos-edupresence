@@ -1,0 +1,60 @@
+{% extends "edu_portal_base.html" %}
+{% block title %}{{ assignment.title }} · Quiz · Thronos EDU{% endblock %}
+{% block content %}
+<main class="edu-shell edu-main">
+  <nav style="margin-bottom:16px">
+    <a class="edu-link" href="/learn/courses/{{ course.id }}">&larr; {{ course.title }}</a>
+  </nav>
+  <h1>{{ assignment.title }}</h1>
+  {% if assignment.description %}<p style="color:var(--edu-muted);margin-bottom:20px">{{ assignment.description }}</p>{% endif %}
+
+  {% if best_passed %}
+    <div class="edu-note" style="background:#ddf6ee;border-color:#9aded0;margin-bottom:22px">
+      <strong>Συγχαρητήρια! Πέρασες αυτό το quiz.</strong>
+    </div>
+  {% endif %}
+
+  {% if can_retry and not best_passed %}
+    <section class="edu-card" style="margin-bottom:24px">
+      <h2 style="font-size:18px;margin:0 0 16px">Ερωτήσεις ({{ questions|length }})</h2>
+      <form method="post" action="/learn/courses/{{ course.id }}/quiz/{{ assignment.id }}/submit">
+        {% for q in questions %}
+        <fieldset style="border:none;padding:0;margin:0 0 20px">
+          <legend style="font-weight:700;font-size:15px;margin-bottom:8px">{{ loop.index }}. {{ q.question_text }}</legend>
+          {% for opt in q._parsed_options %}
+          <label style="display:block;padding:6px 0;cursor:pointer;font-size:14px">
+            <input type="radio" name="q_{{ loop.parent.index0 }}" value="{{ loop.index0 }}" required>
+            {{ opt }}
+          </label>
+          {% endfor %}
+        </fieldset>
+        {% endfor %}
+        <button type="submit" class="edu-btn primary">Υποβολή</button>
+        <p style="color:var(--edu-muted);font-size:13px;margin-top:8px">
+          Προσπάθεια {{ past_attempts|length + 1 }} από {{ max_attempts }}
+        </p>
+      </form>
+    </section>
+  {% elif not best_passed %}
+    <div class="edu-note" style="margin-bottom:22px">
+      <strong>Εξαντλήθηκαν οι προσπάθειες ({{ max_attempts }}/{{ max_attempts }}).</strong>
+    </div>
+  {% endif %}
+
+  {% if past_attempts %}
+  <section>
+    <h2 style="font-size:18px;margin-bottom:12px">Ιστορικό προσπαθειών</h2>
+    <div class="edu-stack">
+      {% for a in past_attempts %}
+      <div class="edu-tile">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <span>Προσπάθεια {{ a.attempt_number }}</span>
+          <span class="edu-chip {{ 'green' if a.passed else '' }}">{{ a.score }}/{{ a.max_score }} · {{ 'Επιτυχία' if a.passed else 'Αποτυχία' }}</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+</main>
+{% endblock %}

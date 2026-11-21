@@ -1,0 +1,46 @@
+{% extends "edu_portal_base.html" %}
+{% block title %}Προφίλ · Thronos EDU{% endblock %}
+{% block content %}
+<main class="edu-shell edu-main">
+  <div class="edu-page-head">
+    <div>
+      <div class="edu-eyebrow" style="color:#078c70">MY PROFILE</div>
+      <h1>{{ student.full_name }}</h1>
+    </div>
+  </div>
+  <section class="edu-stat-grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+    <div class="edu-stat">
+      <strong>{{ enrollments|length }}</strong>
+      <span>Εγγραφές σε μαθήματα</span>
+    </div>
+    <div class="edu-stat">
+      <strong>{{ student.email[:3] ~ '***' if student.email else '—' }}</strong>
+      <span>Email (masked)</span>
+    </div>
+  </section>
+  {% if enrollments %}
+  <section>
+    <h2 style="font-size:19px;margin-bottom:12px">Τα μαθήματά μου</h2>
+    <div class="edu-stack">
+      {% for e in enrollments %}
+      <article class="edu-tile">
+        <span class="edu-chip {{ 'green' if e.status == 'completed' else '' }}">{{ e.status }}</span>
+        <h3 style="margin:6px 0 2px">{{ e.course.title }}</h3>
+        <p style="margin:0;color:var(--edu-muted);font-size:13px">
+          Εγγραφή: {{ e.enrolled_at.strftime('%d/%m/%Y') if e.enrolled_at else '-' }}
+        </p>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+  <div class="edu-note" style="margin-top:22px">
+    <strong>Wallet linkage</strong>
+    {% if student.thr_wallet %}
+      THR Wallet linked: {{ student.thr_wallet[:8] }}…
+    {% else %}
+      Δεν έχει συνδεθεί THR Wallet. Δεν απαιτείται για μάθηση.
+    {% endif %}
+  </div>
+</main>
+{% endblock %}

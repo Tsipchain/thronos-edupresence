@@ -18,8 +18,9 @@ from sqlalchemy import inspect, text
 from app.db import Base, engine, get_db
 from app.models import (
     Attendance, Classroom, Enrollment, Lesson, Makeup,
-    Course, Grade, Certificate, Node, SmsMessage, EmailMessage,
+    Course, Assignment, Grade, Certificate, Node, SmsMessage, EmailMessage,
     Student, UnableRequest, now_utc,
+    CourseEnrollment, CourseModule, ModuleProgress, QuizQuestion, QuizAttempt,
 )
 from app.security import hash_identity, qr_png_bytes, sign_payload, verify_token
 from app.seed import seed_demo
@@ -376,6 +377,310 @@ def edu_verified_student_login(request: Request):
     """No misleading 'TaxisNet mock' student login until a verified issuer exists."""
     return templates.TemplateResponse(request, "edu_student_login.html", {
         "current_user": current_user(request),
+    })
+
+
+# ---------------------------------------------------------------------------
+# LMS helper
+# ---------------------------------------------------------------------------
+
+def _resolve_verified_student(learner: dict | None, db: Session) -> Student | None:
+    if not learner or learner.get("role") != "student":
+        return None
+    if learner.get("provider") not in {"gov_verified", "edu_verified_student"}:
+        return None
+    tax_id = str(learner.get("tax_id", "")).strip()
+    if not tax_id:
+        return None
+    return db.query(Student).filter(Student.tax_id == tax_id, Student.is_active.is_(True)).first()
+
+
+# ---------------------------------------------------------------------------
+# LMS routes: course detail, enrollment, modules, quizzes, certificates, profile, teacher
+# ---------------------------------------------------------------------------
+
+@app.get("/learn/courses/{course_id}", response_class=HTMLResponse)
+def edu_course_detail(course_id: int, request: Request, db: Annotated[Session, Depends(get_db)]):
+    course = db.query(Course).filter(
+        Course.id == course_id, Course.is_active.is_(True), Course.status == "published"
+    ).first()
+    if not course:
+        raise HTTPException(404, "course_not_found")
+    modules = (db.query(CourseModule)
+               .filter(CourseModule.course_id == course_id, CourseModule.is_published.is_(True))
+               .order_by(CourseModule.order_index).all())
+    quizzes = (db.query(Assignment)
+               .filter(Assignment.course_id == course_id,
+                       Assignment.assignment_type == "quiz",
+                       Assignment.status == "published").all())
+    learner = current_user(request)
+    enrolled = False
+    enrollment = None
+    module_progress = {}
+    if learner and learner.get("tax_id"):
+        student = db.query(Student).filter(
+            Student.tax_id == str(learner["tax_id"]), Student.is_active.is_(True)
+        ).first()
+        if student:
+            enrollment = db.query(CourseEnrollment).filter(
+                CourseEnrollment.course_id == course_id,
+                CourseEnrollment.student_id == student.id
+            ).first()
+            enrolled = enrollment is not None
+            if enrolled:
+                progress_rows = db.query(ModuleProgress).filter(
+                    ModuleProgress.student_id == student.id,
+                    ModuleProgress.module_id.in_([m.id for m in modules])
+                ).all()
+                module_progress = {p.module_id: p for p in progress_rows}
+    return templates.TemplateResponse(request, "edu_course_detail.html", {
+        "current_user": learner, "course": course, "modules": modules,
+        "quizzes": quizzes, "enrolled": enrolled, "enrollment": enrollment,
+        "module_progress": module_progress,
+    })
+
+
+@app.post("/learn/courses/{course_id}/enroll")
+def edu_course_enroll(course_id: int, request: Request, db: Annotated[Session, Depends(get_db)]):
+    learner = current_user(request)
+    if not learner or learner.get("role") != "student" or \
+            learner.get("provider") not in {"gov_verified", "edu_verified_student"}:
+        raise HTTPException(403, "verified_student_required")
+    course = db.query(Course).filter(
+        Course.id == course_id, Course.is_active.is_(True), Course.status == "published"
+    ).first()
+    if not course:
+        raise HTTPException(404, "course_not_found")
+    student = db.query(Student).filter(
+        Student.tax_id == str(learner.get("tax_id", "")), Student.is_active.is_(True)
+    ).first()
+    if not student:
+        raise HTTPException(403, "student_record_not_found")
+    existing = db.query(CourseEnrollment).filter(
+        CourseEnrollment.course_id == course_id, CourseEnrollment.student_id == student.id
+    ).first()
+    if existing:
+        return RedirectResponse(f"/learn/courses/{course_id}", status_code=303)
+    db.add(CourseEnrollment(course_id=course_id, student_id=student.id))
+    db.commit()
+    return RedirectResponse(f"/learn/courses/{course_id}", status_code=303)
+
+
+@app.get("/learn/courses/{course_id}/modules/{module_id}", response_class=HTMLResponse)
+def edu_module_player(course_id: int, module_id: int, request: Request,
+                      db: Annotated[Session, Depends(get_db)]):
+    learner = current_user(request)
+    if not learner:
+        return RedirectResponse("/learn/login", status_code=303)
+    student = _resolve_verified_student(learner, db)
+    if not student:
+        raise HTTPException(403, "verified_student_required")
+    enrollment = db.query(CourseEnrollment).filter(
+        CourseEnrollment.course_id == course_id, CourseEnrollment.student_id == student.id
+    ).first()
+    if not enrollment:
+        raise HTTPException(403, "enrollment_required")
+    module = db.query(CourseModule).filter(
+        CourseModule.id == module_id, CourseModule.course_id == course_id,
+        CourseModule.is_published.is_(True)
+    ).first()
+    if not module:
+        raise HTTPException(404, "module_not_found")
+    progress = db.query(ModuleProgress).filter(
+        ModuleProgress.module_id == module_id, ModuleProgress.student_id == student.id
+    ).first()
+    all_modules = (db.query(CourseModule)
+                   .filter(CourseModule.course_id == course_id, CourseModule.is_published.is_(True))
+                   .order_by(CourseModule.order_index).all())
+    course = db.get(Course, course_id)
+    return templates.TemplateResponse(request, "edu_module_player.html", {
+        "current_user": learner, "course": course, "module": module,
+        "progress": progress, "all_modules": all_modules, "student": student,
+    })
+
+
+@app.post("/learn/courses/{course_id}/modules/{module_id}/complete")
+def edu_module_complete(course_id: int, module_id: int, request: Request,
+                        db: Annotated[Session, Depends(get_db)]):
+    learner = current_user(request)
+    student = _resolve_verified_student(learner, db) if learner else None
+    if not student:
+        raise HTTPException(403, "verified_student_required")
+    enrollment = db.query(CourseEnrollment).filter(
+        CourseEnrollment.course_id == course_id, CourseEnrollment.student_id == student.id
+    ).first()
+    if not enrollment:
+        raise HTTPException(403, "enrollment_required")
+    module = db.query(CourseModule).filter(
+        CourseModule.id == module_id, CourseModule.course_id == course_id
+    ).first()
+    if not module:
+        raise HTTPException(404)
+    existing = db.query(ModuleProgress).filter(
+        ModuleProgress.module_id == module_id, ModuleProgress.student_id == student.id
+    ).first()
+    if not existing:
+        db.add(ModuleProgress(module_id=module_id, student_id=student.id,
+                              completed=True, completed_at=now_utc()))
+        db.commit()
+    return RedirectResponse(f"/learn/courses/{course_id}/modules/{module_id}", status_code=303)
+
+
+@app.get("/learn/courses/{course_id}/quiz/{assignment_id}", response_class=HTMLResponse)
+def edu_quiz_page(course_id: int, assignment_id: int, request: Request,
+                  db: Annotated[Session, Depends(get_db)]):
+    learner = current_user(request)
+    student = _resolve_verified_student(learner, db) if learner else None
+    if not student:
+        return RedirectResponse("/learn/login", status_code=303)
+    enrollment = db.query(CourseEnrollment).filter(
+        CourseEnrollment.course_id == course_id, CourseEnrollment.student_id == student.id
+    ).first()
+    if not enrollment:
+        raise HTTPException(403, "enrollment_required")
+    assignment = db.query(Assignment).filter(
+        Assignment.id == assignment_id, Assignment.course_id == course_id,
+        Assignment.assignment_type == "quiz", Assignment.status == "published"
+    ).first()
+    if not assignment:
+        raise HTTPException(404, "quiz_not_found")
+    import json as _json
+    questions = (db.query(QuizQuestion)
+                 .filter(QuizQuestion.assignment_id == assignment_id)
+                 .order_by(QuizQuestion.order_index).all())
+    for q in questions:
+        q._parsed_options = _json.loads(q.options_json) if q.options_json else []
+    past_attempts = (db.query(QuizAttempt)
+                     .filter(QuizAttempt.assignment_id == assignment_id,
+                             QuizAttempt.student_id == student.id)
+                     .order_by(QuizAttempt.attempt_number.desc()).all())
+    max_attempts = 3
+    can_retry = len(past_attempts) < max_attempts
+    best_passed = any(a.passed for a in past_attempts)
+    return templates.TemplateResponse(request, "edu_quiz.html", {
+        "current_user": learner, "course": db.get(Course, course_id),
+        "assignment": assignment, "questions": questions,
+        "past_attempts": past_attempts, "can_retry": can_retry,
+        "max_attempts": max_attempts, "best_passed": best_passed,
+    })
+
+
+@app.post("/learn/courses/{course_id}/quiz/{assignment_id}/submit")
+async def edu_quiz_submit(course_id: int, assignment_id: int, request: Request,
+                          db: Annotated[Session, Depends(get_db)]):
+    import json as _json
+    learner = current_user(request)
+    student = _resolve_verified_student(learner, db) if learner else None
+    if not student:
+        raise HTTPException(403, "verified_student_required")
+    enrollment = db.query(CourseEnrollment).filter(
+        CourseEnrollment.course_id == course_id, CourseEnrollment.student_id == student.id
+    ).first()
+    if not enrollment:
+        raise HTTPException(403, "enrollment_required")
+    assignment = db.query(Assignment).filter(
+        Assignment.id == assignment_id, Assignment.course_id == course_id,
+        Assignment.assignment_type == "quiz", Assignment.status == "published"
+    ).first()
+    if not assignment:
+        raise HTTPException(404)
+    past_count = db.query(QuizAttempt).filter(
+        QuizAttempt.assignment_id == assignment_id, QuizAttempt.student_id == student.id
+    ).count()
+    if past_count >= 3:
+        raise HTTPException(403, "max_attempts_exceeded")
+    questions = (db.query(QuizQuestion)
+                 .filter(QuizQuestion.assignment_id == assignment_id)
+                 .order_by(QuizQuestion.order_index).all())
+    form = await request.form()
+    score = 0.0
+    max_score = 0.0
+    answers = {}
+    for i, q in enumerate(questions):
+        max_score += q.points
+        answer = form.get(f"q_{i}", "")
+        answers[str(i)] = answer
+        try:
+            if int(answer) == q.correct_index:
+                score += q.points
+        except (ValueError, TypeError):
+            pass
+    passing_threshold = (assignment.max_score * 0.6) if assignment.max_score > 0 else (max_score * 0.6)
+    passed = score >= passing_threshold
+    attempt = QuizAttempt(
+        assignment_id=assignment_id, student_id=student.id,
+        answers_json=_json.dumps(answers), score=score, max_score=max_score,
+        passed=passed, attempt_number=past_count + 1,
+    )
+    db.add(attempt)
+    db.commit()
+    return RedirectResponse(f"/learn/courses/{course_id}/quiz/{assignment_id}", status_code=303)
+
+
+@app.get("/learn/my-courses", response_class=HTMLResponse)
+def edu_my_courses(request: Request, db: Annotated[Session, Depends(get_db)]):
+    learner = current_user(request)
+    student = _resolve_verified_student(learner, db) if learner else None
+    if not student:
+        return RedirectResponse("/learn/login", status_code=303)
+    enrollments = (db.query(CourseEnrollment)
+                   .filter(CourseEnrollment.student_id == student.id)
+                   .order_by(CourseEnrollment.enrolled_at.desc()).all())
+    return templates.TemplateResponse(request, "edu_my_courses.html", {
+        "current_user": learner, "student": student, "enrollments": enrollments,
+    })
+
+
+@app.get("/learn/certificates", response_class=HTMLResponse)
+def edu_certificates_page(request: Request, db: Annotated[Session, Depends(get_db)]):
+    learner = current_user(request)
+    student = _resolve_verified_student(learner, db) if learner else None
+    if not student:
+        return RedirectResponse("/learn/login", status_code=303)
+    certs = (db.query(Certificate)
+             .filter(Certificate.student_id == student.id, Certificate.status == "issued")
+             .order_by(Certificate.issued_at.desc()).all())
+    return templates.TemplateResponse(request, "edu_certificates.html", {
+        "current_user": learner, "certificates": certs, "student": student,
+    })
+
+
+@app.get("/learn/profile", response_class=HTMLResponse)
+def edu_profile_page(request: Request, db: Annotated[Session, Depends(get_db)]):
+    learner = current_user(request)
+    student = _resolve_verified_student(learner, db) if learner else None
+    if not student:
+        return RedirectResponse("/learn/login", status_code=303)
+    enrollments = (db.query(CourseEnrollment)
+                   .filter(CourseEnrollment.student_id == student.id).all())
+    return templates.TemplateResponse(request, "edu_profile.html", {
+        "current_user": learner, "student": student, "enrollments": enrollments,
+    })
+
+
+@app.get("/teach", response_class=HTMLResponse)
+def edu_teacher_dashboard(request: Request, db: Annotated[Session, Depends(get_db)]):
+    learner = current_user(request)
+    if not learner or learner.get("role") != "teacher":
+        raise HTTPException(403, "teacher_access_required")
+    if learner.get("provider") not in {"gov_verified", "edu_verified_student", "edu_verified_teacher"}:
+        raise HTTPException(403, "verified_teacher_required")
+    courses = (db.query(Course)
+               .filter(Course.teacher_name == learner.get("full_name", ""))
+               .order_by(Course.id.desc()).all())
+    course_stats = []
+    for c in courses:
+        enroll_count = db.query(CourseEnrollment).filter(CourseEnrollment.course_id == c.id).count()
+        module_count = db.query(CourseModule).filter(CourseModule.course_id == c.id).count()
+        quiz_count = db.query(Assignment).filter(
+            Assignment.course_id == c.id, Assignment.assignment_type == "quiz"
+        ).count()
+        course_stats.append({
+            "course": c, "enrollments": enroll_count,
+            "modules": module_count, "quizzes": quiz_count,
+        })
+    return templates.TemplateResponse(request, "edu_teach_dashboard.html", {
+        "current_user": learner, "course_stats": course_stats,
     })
 
 

@@ -1,0 +1,34 @@
+{% extends "edu_portal_base.html" %}
+{% block title %}Τα μαθήματά μου · Thronos EDU{% endblock %}
+{% block content %}
+<main class="edu-shell edu-main">
+  <div class="edu-page-head">
+    <div>
+      <div class="edu-eyebrow" style="color:#078c70">MY COURSES</div>
+      <h1>Τα μαθήματά μου</h1>
+      <p>{{ student.full_name }}</p>
+    </div>
+    <a class="edu-btn outline" href="/learn/courses">Κατάλογος</a>
+  </div>
+  {% if enrollments %}
+  <div class="edu-grid">
+    {% for e in enrollments %}
+    <article class="edu-card">
+      <span class="edu-chip {{ 'green' if e.status == 'completed' else '' }}">{{ e.status }}</span>
+      <h3 style="margin-top:10px">{{ e.course.title }}</h3>
+      {% if e.course.code %}<p>{{ e.course.code }}</p>{% endif %}
+      <p style="color:var(--edu-muted);font-size:13px">
+        Εγγραφή: {{ e.enrolled_at.strftime('%d/%m/%Y') if e.enrolled_at else '-' }}
+      </p>
+      <a class="edu-link" href="/learn/courses/{{ e.course.id }}">Άνοιγμα μαθήματος</a>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="edu-empty">
+    <strong>Δεν έχεις εγγραφεί σε κάποιο μάθημα ακόμη.</strong>
+    <p><a class="edu-link" href="/learn/courses">Ανακάλυψε μαθήματα</a></p>
+  </div>
+  {% endif %}
+</main>
+{% endblock %}

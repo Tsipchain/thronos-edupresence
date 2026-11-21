@@ -16,13 +16,20 @@
         <span><strong>THRONOS EDU</strong><small>Learning by ThronosLabs</small></span>
       </a>
       <div class="edu-links">
-        <a href="/learn/courses">Μαθήματα</a>
-        <a href="/student-dashboard">Τα μαθήματά μου</a>
+        <a href="/learn/courses">Discover</a>
+        <a href="/student-dashboard">Dashboard</a>
+        <a href="/learn/my-courses">My Courses</a>
+        <a href="/learn/certificates">Certificates</a>
+        <a href="/learn/profile">Profile</a>
         {% if current_user and current_user.role == 'student'
               and current_user.provider in ['gov_verified','edu_verified_student'] %}
           <a href="/logout">Έξοδος</a>
+        {% elif current_user and current_user.role == 'teacher'
+              and current_user.provider in ['gov_verified','edu_verified_student','edu_verified_teacher'] %}
+          <a href="/teach">Teacher</a>
+          <a href="/logout">Έξοδος</a>
         {% else %}
-          <a href="/learn/login">Σύνδεση</a>
+          <a href="/learn/login">Sign in</a>
         {% endif %}
       </div>
     </nav>
