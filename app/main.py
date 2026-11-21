@@ -28,11 +28,13 @@ from app.import_export import import_students_to_classroom, export_classroom_to_
 from app.admin_import import router as admin_router
 from app.admin_ui import router as admin_ui_router
 from app.university import router as university_router
+from app.api import router as api_router
 
 app = FastAPI(title=settings.app_name)
 app.include_router(admin_router)
 app.include_router(admin_ui_router)
 app.include_router(university_router)
+app.include_router(api_router)
 
 app.add_middleware(
     CORSMiddleware,

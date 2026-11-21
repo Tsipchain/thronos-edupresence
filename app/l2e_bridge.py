@@ -21,7 +21,7 @@ import hmac as _hmac
 import json
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 import requests
@@ -100,7 +100,7 @@ def process_outbox(db: "Session") -> dict:
     if not settings.l2e_enabled:
         return {"delivered": 0, "failed": 0, "skipped": 0}
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     pending = db.query(L2EOutboxEntry).filter(
         L2EOutboxEntry.status == "pending",
     ).all()

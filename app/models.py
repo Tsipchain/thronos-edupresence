@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db import Base
 
 def now_utc() -> datetime:
-    return datetime.utcnow()
+    return datetime.now(timezone.utc)
 
 class University(Base):
     __tablename__ = "universities"
