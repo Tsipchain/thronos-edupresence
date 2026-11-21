@@ -1,0 +1,53 @@
+{% extends "edu_portal_base.html" %}
+{% block title %}{{ module.title }} · {{ course.title }} · Thronos EDU{% endblock %}
+{% block content %}
+<main class="edu-shell edu-main">
+  <nav style="margin-bottom:16px">
+    <a class="edu-link" href="/learn/courses/{{ course.id }}">&larr; {{ course.title }}</a>
+  </nav>
+  <div class="edu-split" style="grid-template-columns:1fr 280px">
+    <section>
+      <header style="margin-bottom:18px">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <span class="edu-chip">{{ module.module_type }}</span>
+          <span style="color:var(--edu-muted);font-size:13px">{{ module.duration_minutes }} λεπτά</span>
+          {% if progress and progress.completed %}
+            <span class="edu-chip green">Ολοκληρώθηκε</span>
+          {% endif %}
+        </div>
+        <h1 style="margin:10px 0 0;font-size:28px">{{ module.title }}</h1>
+      </header>
+      <article class="edu-card" style="min-height:200px">
+        {{ module.content|safe if module.content else '<p style="color:var(--edu-muted)">Δεν υπάρχει ακόμη περιεχόμενο για αυτή την ενότητα.</p>' }}
+      </article>
+      <div style="display:flex;gap:12px;margin-top:18px;flex-wrap:wrap;align-items:center">
+        {% if not progress or not progress.completed %}
+          <form method="post" action="/learn/courses/{{ course.id }}/modules/{{ module.id }}/complete">
+            <button type="submit" class="edu-btn primary">Ολοκλήρωσα αυτή την ενότητα</button>
+          </form>
+        {% endif %}
+        {% set idx = all_modules|map(attribute='id')|list %}
+        {% set pos = idx.index(module.id) if module.id in idx else -1 %}
+        {% if pos > 0 %}
+          <a class="edu-btn outline" href="/learn/courses/{{ course.id }}/modules/{{ all_modules[pos-1].id }}">← Προηγούμενη</a>
+        {% endif %}
+        {% if pos >= 0 and pos < idx|length - 1 %}
+          <a class="edu-btn outline" href="/learn/courses/{{ course.id }}/modules/{{ all_modules[pos+1].id }}">Επόμενη →</a>
+        {% endif %}
+      </div>
+    </section>
+    <aside>
+      <h3 style="font-size:16px;margin:0 0 10px">Ενότητες</h3>
+      <div class="edu-stack">
+        {% for m in all_modules %}
+        <a href="/learn/courses/{{ course.id }}/modules/{{ m.id }}"
+           class="edu-tile" style="text-decoration:none;{{ 'border-color:var(--edu-mint)' if m.id == module.id else '' }}">
+          <span style="font-size:13px;color:var(--edu-muted)">{{ loop.index }}.</span>
+          <span style="font-size:14px;font-weight:600">{{ m.title }}</span>
+        </a>
+        {% endfor %}
+      </div>
+    </aside>
+  </div>
+</main>
+{% endblock %}

@@ -1,0 +1,71 @@
+{% extends "edu_portal_base.html" %}
+{% block title %}Thronos EDU — Μάθε. Προχώρα. Επιβραβεύσου.{% endblock %}
+{% block content %}
+<section class="edu-hero">
+  <div class="edu-shell edu-hero-layout">
+    <div>
+      <div class="edu-eyebrow">THRONOS EDU · LEARN-2-EARN</div>
+      <h1>Η γνώση χτίζει το αύριο. <span style="color:#5ee0bd">Ξεκίνα σήμερα.</span></h1>
+      <p>Μαθήματα, εκπαιδευτική πρόοδος και πιστοποιητικά σε έναν χώρο.
+         Παρακολούθησε χωρίς να χρειάζεσαι κρυπτονομίσματα ή THR Wallet.</p>
+      <div class="edu-actions">
+        <a class="edu-btn primary" href="/learn/courses">Ανακάλυψε μαθήματα</a>
+        <a class="edu-btn outline" href="/student-dashboard">Ο χώρος μου</a>
+      </div>
+    </div>
+    <div class="edu-illustration" aria-label="Thronos EDU · εκπαιδευτική διαδρομή">
+      <div class="top"><span>THRONOS LEARNING</span><span aria-hidden="true">● ● ●</span></div>
+      <div class="edu-ring" aria-hidden="true">T</div>
+      <div class="caption">Learn · Complete · Certify</div>
+      <div style="display:flex;justify-content:center;gap:8px;margin-top:18px">
+        <span class="edu-chip green">Μάθηση</span>
+        <span class="edu-chip">Πιστοποίηση</span>
+        <span class="edu-chip">Προαιρετικό L2E</span>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="edu-shell edu-section" aria-labelledby="features-title">
+  <h2 id="features-title">Μία πλατφόρμα. Πραγματική εκπαιδευτική διαδρομή.</h2>
+  <p class="edu-subtitle">Το Thronos EDU διαχωρίζει τη φοίτηση από τις οικονομικές ανταμοιβές. Η πρόοδός σου ανήκει σε εσένα.</p>
+  <div class="edu-grid">
+    <article class="edu-card"><div class="edu-symbol" aria-hidden="true">▤</div>
+      <h3>Μαθήματα & ενότητες</h3><p>Εγκεκριμένο εκπαιδευτικό περιεχόμενο, ενότητες και προσωπική πρόοδος όταν ενεργοποιηθούν τα αντίστοιχα μαθήματα.</p></article>
+    <article class="edu-card"><div class="edu-symbol" aria-hidden="true">✓</div>
+      <h3>Quizzes & αξιολόγηση</h3><p>Η αξιολόγηση θα βασίζεται σε πραγματικές απαντήσεις και επαληθευμένη ολοκλήρωση, όχι σε εικονική πρόοδο.</p></article>
+    <article class="edu-card"><div class="edu-symbol" aria-hidden="true">◇</div>
+      <h3>Πιστοποιητικά & L2E</h3><p>Ακαδημαϊκά αποτελέσματα και πιστοποιητικά. Τα L2E claims παραμένουν προαιρετικά, μόνο για επαληθευμένα THR Wallets.</p></article>
+  </div>
+</section>
+<section class="edu-shell edu-section" aria-labelledby="courses-title" style="padding-top:0">
+  <div class="edu-list-head">
+    <h2 id="courses-title">Διαθέσιμα μαθήματα</h2>
+    <a class="edu-link" href="/learn/courses">Όλος ο κατάλογος</a>
+  </div>
+  {% if published_courses %}
+  <div class="edu-grid">
+    {% for course in published_courses %}
+    <article class="edu-card">
+      <span class="edu-chip green">Δημοσιευμένο</span>
+      <h3>{{ course.title }}</h3>
+      {% if course.code %}<p>{{ course.code }}</p>{% endif %}
+      <p>{{ course.description|truncate(145) if course.description else 'Δείτε τον κατάλογο για περισσότερες πληροφορίες.' }}</p>
+      <p><a class="edu-link" href="/learn/courses/{{ course.id }}">Στοιχεία μαθήματος</a></p>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+    <div class="edu-empty" data-state="no-published-courses">
+      <strong>Δεν υπάρχουν ακόμη δημοσιευμένα μαθήματα.</strong>
+      <p>Ο κατάλογος θα εμφανίσει μόνο πραγματικά μαθήματα με ρητή κατάσταση δημοσίευσης — όχι στοιχεία από το παλιό demo παρουσιών.</p>
+    </div>
+  {% endif %}
+</section>
+<section class="edu-shell edu-section" style="padding-top:0">
+  <div class="edu-note">
+    <strong>Μάθηση χωρίς THR Wallet</strong>
+    Η εγγραφή, η παρακολούθηση και η πρόσβαση σε εκπαιδευτικό περιεχόμενο δεν πρέπει να απαιτούν pledge.
+    Το Learn-2-Earn Bridge και η εξαργύρωση L2E παραμένουν ανενεργά μέχρι να ολοκληρωθεί η επαλήθευση ταυτότητας και επιλεξιμότητας.
+  </div>
+</section>
+{% endblock %}

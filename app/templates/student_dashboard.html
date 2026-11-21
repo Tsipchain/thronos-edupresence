@@ -1,86 +1,96 @@
-{% extends "base.html" %}
-{% block breadcrumbs %}
-  <span>›</span><span>Student Dashboard / Τα μαθήματά μου</span>
-{% endblock %}
+{% extends "edu_portal_base.html" %}
+{% block title %}Τα μαθήματά μου · Thronos EDU{% endblock %}
 {% block content %}
-<style>
-  .edu-student-head{background:linear-gradient(125deg,#102b46,#164c5b);color:#fff;padding:1.5rem 1.7rem;border-radius:16px;margin:0 0 1.3rem}
-  .edu-student-head h1{color:#fff;margin:.25rem 0 .5rem;font-size:clamp(1.5rem,3vw,2rem)}
-  .edu-student-head p{color:#def4f2;margin:.3rem 0;line-height:1.6}
-  .edu-student-kicker{text-transform:uppercase;letter-spacing:.1em;color:#a4efe0;font-size:.75rem;font-weight:700}
-  .edu-student-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem;margin:1rem 0 1.5rem}
-  .edu-student-card{border:1px solid #cad9e4;background:#fff;border-radius:12px;padding:1.1rem;box-shadow:0 4px 15px #1030470d}
-  .edu-student-card h3{margin:.2rem 0 .65rem;color:#183850;font-size:1.08rem}
-  .edu-student-card p{margin:.35rem 0;color:#42566a;line-height:1.5}
-  .edu-student-pill{display:inline-block;background:#e8f3f8;color:#20536e;font-size:.8rem;border-radius:999px;padding:.28rem .65rem;font-weight:700}
-  .edu-student-tag{font-size:.8rem;font-weight:700;color:#176653}
-  .edu-student-note{border-left:4px solid #27967c;background:#eaf7f2;border-radius:6px;padding:1rem 1.2rem;margin-top:1rem;color:#174a3c;line-height:1.6}
-  .edu-student-muted{color:#67798a}
-  .edu-student-section{margin:1.4rem 0 .7rem;font-size:1.2rem;color:#17384c}
-  @media(max-width:560px){.edu-student-head{padding:1.2rem}.edu-student-grid{grid-template-columns:1fr}}
-</style>
-<section class="edu-student-head" aria-labelledby="edu-student-title">
-  <div class="edu-student-kicker">THRONOS EDU · LEARN-2-EARN</div>
-  <h1 id="edu-student-title">Πίνακας Μαθητή / Student Dashboard</h1>
+<main class="edu-shell edu-main" id="edu-student-dashboard">
+  <div class="edu-page-head">
+    <div>
+      <div class="edu-eyebrow" style="color:#078c70">MY LEARNING · THRONOS EDU</div>
+      <h1>Τα μαθήματά μου</h1>
+      {% if student %}
+        <p>Καλώς ήρθες, <strong>{{ student.full_name }}</strong>. Η πρόοδός σου, στον δικό σου χώρο.</p>
+      {% else %}
+        <p>Δεν βρέθηκε εγγραφή μαθητή αντιστοιχισμένη στην επαληθευμένη ταυτότητά σου.</p>
+      {% endif %}
+    </div>
+    <a class="edu-btn outline" href="/learn/courses">Κατάλογος μαθημάτων</a>
+  </div>
+  <div class="edu-note" id="edu-walletless-policy">
+    <strong>Δεν χρειάζεσαι THR Wallet για να μάθεις.</strong>
+    Η παρακολούθηση και τα ακαδημαϊκά αποτελέσματα λειτουργούν ανεξάρτητα από το πορτοφόλι.
+    Η συμμετοχή στο Learn-2-Earn είναι προαιρετική και απαιτεί ξεχωριστή επαλήθευση επιλεξιμότητας.
+    Δεν αποδίδεται αυτόματα ανταμοιβή.
+  </div>
+
   {% if student %}
-    <p>Καλώς ήρθες, <strong>{{ student.full_name }}</strong>. Εδώ βλέπεις την επαληθευμένη πρόοδο των μαθημάτων σου.</p>
-  {% else %}
-    <p>Δεν βρέθηκε εγγραφή μαθητή συνδεδεμένη με την επαληθευμένη εκπαιδευτική ταυτότητά σου.</p>
-  {% endif %}
-  <p>Δεν χρειάζεσαι THR Wallet για να παρακολουθείς μαθήματα, παρουσίες και βαθμολογίες.</p>
-</section>
+  <section aria-label="Σύνοψη εκπαίδευσης" class="edu-stat-grid">
+    <div class="edu-stat"><strong>{{ academic_courses|length }}</strong><span>Καταγεγραμμένα ακαδημαϊκά μαθήματα</span></div>
+    <div class="edu-stat"><strong>{{ school_enrollments|length }}</strong><span>Εγγραφές σε τμήματα</span></div>
+    <div class="edu-stat"><strong>{{ academic_courses|selectattr('certificate_issued')|list|length }}</strong><span>Εκδοθέντα πιστοποιητικά</span></div>
+  </section>
+  <div class="edu-split">
+    <section aria-labelledby="edu-courses-title">
+      <div class="edu-list-head"><h2 id="edu-courses-title">Μαθήματα και αποτελέσματα</h2></div>
+      {% if academic_courses %}
+      <div class="edu-stack" id="edu-academic-courses">
+        {% for item in academic_courses %}
+        <article class="edu-tile">
+          <span class="edu-chip green">{{ "Πιστοποιήθηκε" if item.certificate_issued else "Καταχωρισμένο" }}</span>
+          <h3 style="margin-top:10px">{{ item.title }}</h3>
+          {% if item.code %}<p>Κωδικός: {{ item.code }}</p>{% endif %}
+          {% if item.score is not none %}
+            <p><strong>Καταχωρισμένος βαθμός:</strong> {{ item.score }}
+              {% if item.passed is not none %} · {{ "Επιτυχία" if item.passed else "Μη επιτυχής" }}{% endif %}
+            </p>
+          {% else %}
+            <p>Δεν έχει καταχωριστεί βαθμολογία.</p>
+          {% endif %}
+          <p><strong>Πιστοποιητικό:</strong> {{ "Εκδόθηκε" if item.certificate_issued else "Δεν έχει εκδοθεί" }}</p>
+          {% if item.l2e_linked %}<span class="edu-chip">L2E course mapping</span>{% endif %}
+        </article>
+        {% endfor %}
+      </div>
+      {% else %}
+        <div class="edu-empty" data-state="no-academic-courses">
+          <strong>Δεν υπάρχουν ακόμη μαθήματα συνδεδεμένα με την εγγραφή σου.</strong>
+          <p>Η πραγματική εγγραφή σε online courses και οι ενότητες μαθημάτων αποτελούν ξεχωριστή επόμενη λειτουργία.</p>
+        </div>
+      {% endif %}
+    </section>
 
-{% if student %}
-  <h2 class="edu-student-section">Εγγραφές και παρουσίες</h2>
-  {% if school_enrollments %}
-    <div class="edu-student-grid" id="edu-enrollment-cards">
-      {% for item in school_enrollments %}
-      <article class="edu-student-card">
-        <span class="edu-student-pill">{{ item.status }}</span>
-        <h3>{{ item.title }}</h3>
-        <p><strong>Τμήμα:</strong> {{ item.classroom }}</p>
-        <p><strong>Καταγεγραμμένες παρουσίες:</strong> {{ item.attended }} / {{ item.lessons }} μαθήματα</p>
-        {% if item.l2e_linked %}<p class="edu-student-tag">Συνδεδεμένο με L2E course</p>{% endif %}
-      </article>
-      {% endfor %}
-    </div>
-  {% else %}
-    <div class="edu-student-card" data-state="no-enrollments">
-      Δεν υπάρχουν ακόμη εγγραφές για αυτή την εκπαιδευτική ταυτότητα.
-    </div>
-  {% endif %}
-
-  <h2 class="edu-student-section">Πανεπιστημιακά μαθήματα / Academic courses</h2>
-  {% if academic_courses %}
-  <div class="edu-student-grid" id="edu-academic-courses">
-    {% for item in academic_courses %}
-    <article class="edu-student-card">
-      <h3>{{ item.title }}</h3>
-      {% if item.code %}<p class="edu-student-muted">{{ item.code }}</p>{% endif %}
-      {% if item.score is not none %}
-      <p><strong>Βαθμός:</strong> {{ item.score }}
-        {% if item.passed %}<span class="edu-student-tag">Επιτυχία</span>{% endif %}</p>
-      {% else %}<p class="edu-student-muted">Δεν έχει καταχωριστεί βαθμός.</p>{% endif %}
-      <p><strong>Πιστοποιητικό:</strong>
-        {{ "Εκδόθηκε" if item.certificate_issued else "Δεν έχει εκδοθεί" }}</p>
-      {% if item.l2e_linked %}<p class="edu-student-tag">L2E course linked</p>{% endif %}
-    </article>
-    {% endfor %}
+    <aside aria-label="Παρουσίες και Learn-2-Earn" class="edu-stack">
+      <section class="edu-card">
+        <div class="edu-list-head"><h2>Παρουσίες & τμήματα</h2></div>
+        {% if school_enrollments %}
+          <div class="edu-stack" id="edu-enrollment-cards">
+            {% for item in school_enrollments %}
+              <div>
+                <span class="edu-chip">{{ item.status }}</span>
+                <h3>{{ item.title }}</h3>
+                <p><strong>Τμήμα:</strong> {{ item.classroom }}</p>
+                <p>Καταγεγραμμένες παρουσίες: <strong>{{ item.attended }} / {{ item.lessons }}</strong></p>
+                {% if item.l2e_linked %}<span class="edu-chip green">L2E mapping</span>{% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p data-state="no-enrollments">Δεν υπάρχουν ακόμη εγγραφές σε τμήματα.</p>
+        {% endif %}
+      </section>
+      <section class="edu-callout">
+        <h2>Learn-2-Earn</h2>
+        <p>Οι ανταμοιβές L2E δεν είναι μέρος της πρόσβασης στα μαθήματα. Για claim απαιτείται επαληθευμένο THR Wallet και έγκριση επιλεξιμότητας.</p>
+        <span class="edu-chip">{{ "Bridge configured" if l2e_bridge_enabled else "Bridge not enabled" }}</span>
+        {% if not l2e_bridge_enabled %}
+          <p>Η αποστολή εκπαιδευτικών γεγονότων στο ThronosChain δεν έχει ενεργοποιηθεί.</p>
+        {% endif %}
+      </section>
+    </aside>
   </div>
   {% else %}
-  <p class="edu-student-muted">Δεν υπάρχουν πανεπιστημιακά μαθήματα συνδεδεμένα με τα τμήματά σου.</p>
+    <div class="edu-empty" data-state="no-student-record">
+      <strong>Δεν βρέθηκε συνδεδεμένη εγγραφή μαθητή.</strong>
+      <p>Ζήτησε ασφαλή αντιστοίχιση από τη γραμματεία. Δεν θα δημιουργήσουμε αυτόματα νέα ταυτότητα ή wallet.</p>
+    </div>
   {% endif %}
-{% else %}
-  <div class="edu-student-card" data-state="no-student-record">
-    Αν είσαι εγγεγραμμένος μαθητής, επικοινώνησε με τη γραμματεία για ασφαλή αντιστοίχιση της ταυτότητάς σου.
-  </div>
-{% endif %}
-
-<div class="edu-student-note" id="edu-walletless-policy">
-  <strong>Learn-2-Earn / Πολιτική ανταμοιβών</strong>
-  <p>Η συμμετοχή και η πρόσβαση στα μαθήματα δεν απαιτούν πορτοφόλι. Η πιθανή αξίωση L2E είναι ξεχωριστή ενέργεια και απαιτεί επιβεβαιωμένη επιλεξιμότητα και επαληθευμένο THR Wallet. Δεν αποδίδεται αυτόματα ανταμοιβή.</p>
-  {% if not l2e_bridge_enabled %}
-    <p><strong>Σύνδεση L2E:</strong> Η αποστολή εκπαιδευτικών γεγονότων στο ThronosChain δεν έχει ενεργοποιηθεί.</p>
-  {% endif %}
-</div>
+</main>
 {% endblock %}

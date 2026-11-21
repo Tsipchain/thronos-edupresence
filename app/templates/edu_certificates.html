@@ -1,0 +1,31 @@
+{% extends "edu_portal_base.html" %}
+{% block title %}Πιστοποιητικά · Thronos EDU{% endblock %}
+{% block content %}
+<main class="edu-shell edu-main">
+  <div class="edu-page-head">
+    <div>
+      <div class="edu-eyebrow" style="color:#078c70">MY CERTIFICATES</div>
+      <h1>Τα πιστοποιητικά μου</h1>
+    </div>
+  </div>
+  {% if certificates %}
+  <div class="edu-grid">
+    {% for cert in certificates %}
+    <article class="edu-card">
+      <span class="edu-chip green">{{ cert.certificate_type }}</span>
+      <h3 style="margin-top:10px">{{ cert.title or cert.course.title }}</h3>
+      <p style="color:var(--edu-muted);font-size:13px">Εκδόθηκε: {{ cert.issued_at.strftime('%d/%m/%Y') if cert.issued_at else '-' }}</p>
+      {% if cert.attestation_hash %}
+        <p style="font-size:12px;color:#8698ad;word-break:break-all">Hash: {{ cert.attestation_hash[:24] }}…</p>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="edu-empty" data-state="no-certificates">
+    <strong>Δεν υπάρχουν ακόμη πιστοποιητικά.</strong>
+    <p>Τα πιστοποιητικά εκδίδονται μετά από πραγματική ολοκλήρωση μαθημάτων, όχι αυτόματα.</p>
+  </div>
+  {% endif %}
+</main>
+{% endblock %}

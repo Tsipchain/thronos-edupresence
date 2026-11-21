@@ -1,0 +1,89 @@
+{% extends "edu_portal_base.html" %}
+{% block title %}{{ course.title }} · Thronos EDU{% endblock %}
+{% block content %}
+<main class="edu-shell edu-main">
+  <nav style="margin-bottom:16px"><a class="edu-link" href="/learn/courses">&larr; Κατάλογος</a></nav>
+  <header class="edu-page-head" style="flex-direction:column;align-items:flex-start">
+    <span class="edu-chip green">Δημοσιευμένο</span>
+    <h1 style="margin-top:8px">{{ course.title }}</h1>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;color:var(--edu-muted);font-size:14px;margin-top:4px">
+      {% if course.code %}<span>Κωδικός: <strong>{{ course.code }}</strong></span>{% endif %}
+      {% if course.teacher_name %}<span>Διδάσκων: <strong>{{ course.teacher_name }}</strong></span>{% endif %}
+      {% if course.credits %}<span>ECTS: <strong>{{ course.credits }}</strong></span>{% endif %}
+      {% if course.semester %}<span>Εξάμηνο: <strong>{{ course.semester }}</strong></span>{% endif %}
+    </div>
+  </header>
+
+  {% if course.description %}
+  <section class="edu-card" style="margin:20px 0">
+    <h2 style="font-size:18px;margin:0 0 8px">Περιγραφή</h2>
+    <p style="color:#536784">{{ course.description }}</p>
+  </section>
+  {% endif %}
+
+  {% if not enrolled %}
+    {% if current_user and current_user.role == 'student'
+          and current_user.provider in ['gov_verified','edu_verified_student'] %}
+      <form method="post" action="/learn/courses/{{ course.id }}/enroll" style="margin:18px 0">
+        <button type="submit" class="edu-btn primary">Εγγραφή στο μάθημα</button>
+      </form>
+    {% else %}
+      <div class="edu-note" style="margin:18px 0">
+        <strong>Για εγγραφή απαιτείται επαληθευμένη ταυτότητα μαθητή.</strong>
+        <a class="edu-link" href="/learn/login">Σύνδεση</a>
+      </div>
+    {% endif %}
+  {% else %}
+    <div class="edu-note" style="margin:18px 0;background:#ddf6ee;border-color:#9aded0">
+      <strong>Είσαι εγγεγραμμένος/η σε αυτό το μάθημα.</strong>
+    </div>
+  {% endif %}
+
+  <section style="margin-top:28px">
+    <h2 style="font-size:20px;margin-bottom:14px">Ενότητες μαθήματος</h2>
+    {% if modules %}
+    <div class="edu-stack">
+      {% for m in modules %}
+      <article class="edu-tile">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <div>
+            <span class="edu-chip">{{ m.module_type }}</span>
+            <h3 style="margin:6px 0 2px">{{ m.title }}</h3>
+            <p style="margin:0">{{ m.duration_minutes }} λεπτά</p>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            {% if enrolled and module_progress.get(m.id) %}
+              <span class="edu-chip green">Ολοκληρώθηκε</span>
+            {% endif %}
+            {% if enrolled %}
+              <a class="edu-btn outline" href="/learn/courses/{{ course.id }}/modules/{{ m.id }}" style="padding:8px 14px;min-height:auto;font-size:13px">Άνοιγμα</a>
+            {% endif %}
+          </div>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}
+      <div class="edu-empty"><strong>Δεν υπάρχουν ακόμη δημοσιευμένες ενότητες.</strong></div>
+    {% endif %}
+  </section>
+
+  {% if quizzes %}
+  <section style="margin-top:28px">
+    <h2 style="font-size:20px;margin-bottom:14px">Quizzes</h2>
+    <div class="edu-stack">
+      {% for q in quizzes %}
+      <article class="edu-tile">
+        <span class="edu-chip">Quiz</span>
+        <h3 style="margin:6px 0 2px">{{ q.title }}</h3>
+        {% if q.description %}<p>{{ q.description|truncate(140) }}</p>{% endif %}
+        {% if enrolled %}
+          <a class="edu-btn outline" href="/learn/courses/{{ course.id }}/quiz/{{ q.id }}" style="padding:8px 14px;min-height:auto;font-size:13px;margin-top:6px">Ξεκίνα Quiz</a>
+        {% endif %}
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+</main>
+{% endblock %}

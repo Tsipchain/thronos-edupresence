@@ -42,7 +42,7 @@ def _seed(db, name, tax_id, classroom_name):
 def test_student_dashboard_requires_a_signed_session(client):
     resp = client.get("/student-dashboard", follow_redirects=False)
     assert resp.status_code == 303
-    assert resp.headers["location"] == "/login"
+    assert resp.headers["location"] == "/learn/login"
     client.cookies.set(settings.session_cookie_name, "totally.invalid")
     assert client.get("/student-dashboard", follow_redirects=False).status_code == 303
 
@@ -111,7 +111,7 @@ def test_expired_session_rejected(client, db_session):
     client.cookies.set(settings.session_cookie_name, sign_payload(payload))
     r = client.get("/student-dashboard", follow_redirects=False)
     assert r.status_code == 303
-    assert r.headers["location"] == "/login"
+    assert r.headers["location"] == "/learn/login"
 
 
 def test_teacher_role_rejected_even_with_verified_provider(client, db_session):
@@ -135,4 +135,4 @@ def test_no_earn_learner_id_cookie_trust(client, db_session):
     client.cookies.set("earn_learner_id", "200000011")
     r = client.get("/student-dashboard", follow_redirects=False)
     assert r.status_code == 303
-    assert r.headers["location"] == "/login"
+    assert r.headers["location"] == "/learn/login"

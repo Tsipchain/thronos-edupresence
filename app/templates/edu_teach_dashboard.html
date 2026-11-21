@@ -1,0 +1,37 @@
+{% extends "edu_portal_base.html" %}
+{% block title %}Teacher Dashboard · Thronos EDU{% endblock %}
+{% block content %}
+<main class="edu-shell edu-main">
+  <div class="edu-page-head">
+    <div>
+      <div class="edu-eyebrow" style="color:#078c70">TEACHER DASHBOARD</div>
+      <h1>Τα μαθήματά μου (Εκπαιδευτής)</h1>
+    </div>
+  </div>
+  {% if course_stats %}
+  <div class="edu-grid">
+    {% for item in course_stats %}
+    <article class="edu-card">
+      <span class="edu-chip {{ 'green' if item.course.status == 'published' else '' }}">{{ item.course.status }}</span>
+      <h3 style="margin-top:10px">{{ item.course.title }}</h3>
+      {% if item.course.code %}<p>Κωδικός: {{ item.course.code }}</p>{% endif %}
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:13px;color:var(--edu-muted)">
+        <span>{{ item.enrollments }} εγγραφές</span>
+        <span>{{ item.modules }} ενότητες</span>
+        <span>{{ item.quizzes }} quizzes</span>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="edu-empty">
+    <strong>Δεν υπάρχουν μαθήματα αντιστοιχισμένα με το όνομά σας.</strong>
+  </div>
+  {% endif %}
+  <div class="edu-note" style="margin-top:24px">
+    <strong>Course creation</strong>
+    Η δημιουργία μαθημάτων, ενοτήτων και quizzes μέσω web interface ετοιμάζεται.
+    Χρησιμοποιήστε το Admin API για προσωρινή διαχείριση.
+  </div>
+</main>
+{% endblock %}

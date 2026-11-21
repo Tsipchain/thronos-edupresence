@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="el">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101d35">
+  <meta name="description" content="Thronos EDU — μαθήματα και πιστοποιητικά με προαιρετική σύνδεση Learn-2-Earn.">
+  <title>{% block title %}Thronos EDU · Learn. Grow. Earn.{% endblock %}</title>
+  <link rel="stylesheet" href="/static/edu-portal.css">
+</head>
+<body class="edu-app">
+  <header class="edu-topbar">
+    <nav class="edu-shell edu-nav" aria-label="Thronos EDU">
+      <a class="edu-brand" href="/" aria-label="Thronos EDU — αρχική">
+        <span class="edu-mark" aria-hidden="true">T</span>
+        <span><strong>THRONOS EDU</strong><small>Learning by ThronosLabs</small></span>
+      </a>
+      <div class="edu-links">
+        <a href="/learn/courses">Discover</a>
+        <a href="/student-dashboard">Dashboard</a>
+        <a href="/learn/my-courses">My Courses</a>
+        <a href="/learn/certificates">Certificates</a>
+        <a href="/learn/profile">Profile</a>
+        {% if current_user and current_user.role == 'student'
+              and current_user.provider in ['gov_verified','edu_verified_student'] %}
+          <a href="/logout">Έξοδος</a>
+        {% elif current_user and current_user.role == 'teacher'
+              and current_user.provider in ['gov_verified','edu_verified_student','edu_verified_teacher'] %}
+          <a href="/teach">Teacher</a>
+          <a href="/logout">Έξοδος</a>
+        {% else %}
+          <a href="/learn/login">Sign in</a>
+        {% endif %}
+      </div>
+    </nav>
+  </header>
+  {% block content %}{% endblock %}
+  <footer class="edu-footer">
+    <div class="edu-shell">
+      <span>© ThronosLabs · Thronos EDU — Εκπαίδευση χωρίς υποχρεωτικό wallet</span>
+      <span>Η έκδοση L2E tokens απαιτεί ξεχωριστή επιλεξιμότητα και επαληθευμένο THR Wallet.</span>
+      <a href="/presence" aria-label="Πειραματικά εργαλεία παρουσιών QR">
+        QR παρουσίες · παλαιό πιλοτικό σύστημα
+      </a>
+    </div>
+  </footer>
+</body>
+</html>
