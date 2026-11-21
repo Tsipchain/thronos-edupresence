@@ -1,0 +1,23 @@
+{% extends "edu_portal_base.html" %}
+{% block title %}Σύνδεση μαθητή · Thronos EDU{% endblock %}
+{% block content %}
+<main class="edu-shell edu-main">
+  <section class="edu-login" aria-labelledby="login-title">
+    <div class="edu-eyebrow" style="color:#078c70">SECURE STUDENT ACCESS</div>
+    <h1 id="login-title">Σύνδεση μαθητή</h1>
+    {% if current_user and current_user.role == 'student'
+          and current_user.provider in ['gov_verified','edu_verified_student'] %}
+      <p>Υπάρχει επαληθευμένη συνεδρία μαθητή.</p>
+      <a class="edu-btn dark" href="/student-dashboard">Άνοιγμα μαθημάτων</a>
+    {% else %}
+      <p>Η πρόσβαση σε προσωπικά μαθήματα, βαθμούς και πιστοποιητικά απαιτεί επαληθευμένη εκπαιδευτική ταυτότητα.</p>
+      <div class="edu-note" data-state="identity-provider-pending">
+        <strong>Η ασφαλής σύνδεση μαθητή δεν έχει ακόμη ενεργοποιηθεί.</strong>
+        Η παλιά δοκιμαστική σύνδεση TaxisNet/Gov δεν αποτελεί απόδειξη ταυτότητας.
+        Δεν προσφέρουμε λειτουργικό κουμπί σύνδεσης πριν εγκριθεί πραγματικός provider.
+      </div>
+    {% endif %}
+    <p style="margin-top:23px"><a class="edu-link" href="/learn/courses">Προβολή δημόσιων μαθημάτων</a></p>
+  </section>
+</main>
+{% endblock %}
