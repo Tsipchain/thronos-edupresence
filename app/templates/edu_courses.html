@@ -1,0 +1,31 @@
+{% extends "edu_portal_base.html" %}
+{% block title %}Μαθήματα · Thronos EDU{% endblock %}
+{% block content %}
+<main class="edu-shell edu-main">
+  <div class="edu-page-head">
+    <div><div class="edu-eyebrow" style="color:#078c70">THRONOS EDU</div>
+      <h1>Κατάλογος μαθημάτων</h1>
+      <p>Προβάλλονται μόνο μαθήματα με ρητή έγκριση δημοσίευσης. Δεν εμφανίζονται προσωπικά δεδομένα ή δοκιμαστικές εγγραφές.</p>
+    </div>
+  </div>
+  {% if courses %}
+    <div class="edu-grid">
+      {% for course in courses %}
+      <article class="edu-card" data-course-id="{{ course.id }}">
+        <span class="edu-chip green">Δημοσιευμένο</span>
+        <h3>{{ course.title }}</h3>
+        {% if course.code %}<p>Κωδικός: {{ course.code }}</p>{% endif %}
+        {% if course.description %}<p>{{ course.description|truncate(220) }}</p>{% endif %}
+        <p>Η εγγραφή ανοίγει μετά την ενεργοποίηση της επαληθευμένης student identity και της ασφαλούς enrollment διαδικασίας.</p>
+      </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="edu-empty" data-state="no-published-courses">
+      <strong>Ο κατάλογος μαθημάτων προετοιμάζεται.</strong>
+      <p>Δεν θα παρουσιάσουμε demo τμήματα, ψεύτικες εγγραφές ή εικονικά μαθήματα σαν διαθέσιμο εκπαιδευτικό προϊόν.</p>
+    </div>
+  {% endif %}
+  <div style="margin-top:25px"><a class="edu-btn outline" href="/">Επιστροφή στην αρχική</a></div>
+</main>
+{% endblock %}
