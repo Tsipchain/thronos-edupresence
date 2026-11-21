@@ -96,3 +96,43 @@ def test_duplicate_identity_is_not_silently_selected(client, db_session):
     assert r.status_code == 409
     assert "Duplicate One" not in r.text
     assert "Duplicate Two" not in r.text
+
+
+def test_expired_session_rejected(client, db_session):
+    _seed(db_session, "Expired Student", "200000008", "Expired Class")
+    payload = {
+        "typ": "session",
+        "tax_id": "200000008",
+        "provider": "edu_verified_student",
+        "role": "student",
+        "full_name": "Expired Student",
+        "exp": int(time.time()) - 60,
+    }
+    client.cookies.set(settings.session_cookie_name, sign_payload(payload))
+    r = client.get("/student-dashboard", follow_redirects=False)
+    assert r.status_code == 303
+    assert r.headers["location"] == "/login"
+
+
+def test_teacher_role_rejected_even_with_verified_provider(client, db_session):
+    _seed(db_session, "Teacher Impersonator", "200000009", "Secret Class")
+    _session(client, "200000009", provider="edu_verified_student", role="teacher")
+    r = client.get("/student-dashboard")
+    assert r.status_code == 403
+    assert "Secret Class" not in r.text
+
+
+def test_l2e_bridge_disabled_notice_shown(client, db_session):
+    _seed(db_session, "L2E Student", "200000010", "L2E Class")
+    _session(client, "200000010")
+    page = client.get("/student-dashboard").text
+    assert "δεν έχει ενεργοποιηθεί" in page.lower() or "δεν έχει ενεργοποιηθεί" in page
+
+
+def test_no_earn_learner_id_cookie_trust(client, db_session):
+    """earn_learner_id cookie must NOT grant dashboard access."""
+    _seed(db_session, "Cookie Victim", "200000011", "Victim Class")
+    client.cookies.set("earn_learner_id", "200000011")
+    r = client.get("/student-dashboard", follow_redirects=False)
+    assert r.status_code == 303
+    assert r.headers["location"] == "/login"
