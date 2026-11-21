@@ -12,17 +12,17 @@
     <div class="gov-left">
       <div class="emblem">Θ</div>
       <div>
-        <div class="small-caps">ΕΛΛΗΝΙΚΗ ΔΗΜΟΚΡΑΤΙΑ</div>
-        <div class="ministry">Thronos EduPresence</div>
+        <div class="small-caps">THRONOSLABS · ΠΙΛΟΤΙΚΟ</div>
+        <div class="ministry">EduPresence · QR Attendance Pilot</div>
       </div>
     </div>
-    <div class="gov-title">Ψηφιακή εκπαίδευση και ενδυνάμωση — Παρουσίες με απόδειξη</div>
+    <div class="gov-title">Πιλοτικό σύστημα καταγραφής παρουσιών με QR</div>
     <div class="gov-right">
-      <strong>Thronos 2.0</strong><br><span>hash-only attestations</span>
+      <strong>EduPresence</strong><br><span>hash-only attestations</span>
     </div>
   </header>
   <nav class="breadcrumbs no-print">
-    <a href="/">Αρχική</a>
+    <a href="/">Thronos EDU</a> <span>›</span> <a href="/presence">QR παρουσίες</a>
     {% block breadcrumbs %}{% endblock %}
     <span class="nav-spacer"></span>
     {% if current_user %}
@@ -32,7 +32,7 @@
       <span class="user-pill">{{ current_user.full_name }}</span>
       <a class="mini-link" href="/logout">Έξοδος</a>
     {% else %}
-      <a class="user-pill" href="/login">Σύνδεση TaxisNet/Gov mock</a>
+      <a class="user-pill" href="/login">Δοκιμαστική σύνδεση (όχι επαληθευμένη)</a>
     {% endif %}
   </nav>
   <main class="page">
