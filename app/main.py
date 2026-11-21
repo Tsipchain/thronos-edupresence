@@ -18,7 +18,8 @@ from sqlalchemy import inspect, text
 from app.db import Base, engine, get_db
 from app.models import (
     Attendance, Classroom, Enrollment, Lesson, Makeup,
-    Node, SmsMessage, EmailMessage, Student, UnableRequest, now_utc,
+    Course, Grade, Certificate, Node, SmsMessage, EmailMessage,
+    Student, UnableRequest, now_utc,
 )
 from app.security import hash_identity, qr_png_bytes, sign_payload, verify_token
 from app.seed import seed_demo
@@ -235,6 +236,108 @@ def assert_lesson_open(lesson: Lesson) -> None:
 # ---------------------------------------------------------------------------
 # Health & dashboard
 # ---------------------------------------------------------------------------
+
+@app.get("/student-dashboard", response_class=HTMLResponse)
+def edu_student_dashboard(request: Request, db: Annotated[Session, Depends(get_db)]):
+    """EDU-owned academic view, independent of THR wallet and Earn cookies.
+
+    This endpoint accepts ONLY an EDU-signed session from a verified student
+    identity provider. The existing /auth/gov/* handlers are mock/pending
+    identity exchanges and MUST NOT authorize student records.
+    """
+    learner = current_user(request)
+    if not learner:
+        return RedirectResponse("/login", status_code=303)
+    if settings.environment == "production" and settings.token_secret.startswith("change-me"):
+        raise HTTPException(status_code=503, detail="edu_session_secret_not_configured")
+    if (learner.get("role") != "student" or
+            learner.get("provider") not in {"gov_verified", "edu_verified_student"} or
+            not learner.get("exp")):
+        raise HTTPException(status_code=403, detail="verified_student_session_required")
+    try:
+        if int(learner["exp"]) <= int(time.time()):
+            raise ValueError("expired")
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=403, detail="verified_student_session_required")
+
+    # The tax ID must come from a VERIFIED EDU identity session. It must never
+    # come from a query parameter, wallet address, learner cookie or JSON body.
+    tax_id = str(learner.get("tax_id") or "").strip()
+    if not tax_id or len(tax_id) > 20:
+        raise HTTPException(status_code=403, detail="verified_student_identity_required")
+
+    matched = (db.query(Student)
+               .filter(Student.tax_id == tax_id, Student.is_active.is_(True))
+               .limit(2).all())
+    if len(matched) > 1:
+        raise HTTPException(status_code=409, detail="ambiguous_student_identity")
+    student = matched[0] if matched else None
+    school_enrollments = []
+    academic_courses = []
+    if student:
+        entries = (db.query(Enrollment)
+                   .filter(Enrollment.student_id == student.id, Enrollment.removed_at.is_(None))
+                   .order_by(Enrollment.id.asc()).all())
+        class_ids = []
+        for entry in entries:
+            classroom = entry.classroom
+            if not classroom:
+                continue
+            class_ids.append(classroom.id)
+            lessons = (db.query(Lesson)
+                       .filter(Lesson.classroom_id == classroom.id)
+                       .order_by(Lesson.starts_at.asc()).all())
+            lesson_ids = [lesson.id for lesson in lessons]
+            present = 0
+            if lesson_ids:
+                attendance = (db.query(Attendance)
+                              .filter(Attendance.student_id == student.id,
+                                      Attendance.lesson_id.in_(lesson_ids)).all())
+                present = sum(1 for a in attendance if a.status in {"present", "late"})
+            school_enrollments.append({
+                "title": classroom.program_name or classroom.name,
+                "classroom": classroom.name,
+                "status": entry.status,
+                "attended": present,
+                "lessons": len(lessons),
+                "l2e_linked": bool(classroom.l2e_course_id),
+            })
+
+        if class_ids:
+            courses = (db.query(Course).filter(Course.classroom_id.in_(class_ids))
+                       .order_by(Course.id.asc()).all())
+            course_ids = [c.id for c in courses]
+            grades = (db.query(Grade)
+                      .filter(Grade.student_id == student.id, Grade.course_id.in_(course_ids))
+                      .all()) if course_ids else []
+            certificates = (db.query(Certificate)
+                            .filter(Certificate.student_id == student.id,
+                                    Certificate.course_id.in_(course_ids)).all()) if course_ids else []
+            grade_by_course = {g.course_id: g for g in grades}
+            certs_by_course = {
+                c.course_id for c in certificates if c.status == "issued"
+            }
+            for course in courses:
+                grade = grade_by_course.get(course.id)
+                academic_courses.append({
+                    "title": course.title,
+                    "code": course.code,
+                    "score": grade.final_score if grade else None,
+                    "passed": grade.passed if grade else None,
+                    "certificate_issued": course.id in certs_by_course,
+                    "l2e_linked": bool(course.l2e_course_id),
+                })
+
+    # No Earn or chain reward is credited here. L2E claim needs separate
+    # verified wallet linkage and explicit upstream eligibility.
+    return render(request, "student_dashboard.html", {
+        "student": student,
+        "school_enrollments": school_enrollments,
+        "academic_courses": academic_courses,
+        "l2e_bridge_enabled": settings.l2e_enabled,
+    })
+
+
 
 @app.get("/health")
 def health():

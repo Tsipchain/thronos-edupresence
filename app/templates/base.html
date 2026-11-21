@@ -26,6 +26,9 @@
     {% block breadcrumbs %}{% endblock %}
     <span class="nav-spacer"></span>
     {% if current_user %}
+      {% if current_user.role == 'student' and current_user.provider in ['gov_verified', 'edu_verified_student'] %}
+        <a class="mini-link" href="/student-dashboard">Τα μαθήματά μου</a>
+      {% endif %}
       <span class="user-pill">{{ current_user.full_name }}</span>
       <a class="mini-link" href="/logout">Έξοδος</a>
     {% else %}
