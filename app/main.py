@@ -249,7 +249,7 @@ def edu_student_dashboard(request: Request, db: Annotated[Session, Depends(get_d
     """
     learner = current_user(request)
     if not learner:
-        return RedirectResponse("/login", status_code=303)
+        return RedirectResponse("/learn/login", status_code=303)
     if settings.environment == "production" and settings.token_secret.startswith("change-me"):
         raise HTTPException(status_code=503, detail="edu_session_secret_not_configured")
     if (learner.get("role") != "student" or
@@ -347,6 +347,41 @@ def health():
             "l2e_enabled": settings.l2e_enabled}
 
 @app.get("/", response_class=HTMLResponse)
+def edu_learning_home(request: Request, db: Annotated[Session, Depends(get_db)]):
+    """Public learner-first entry; never expose internal attendance nodes here."""
+    published = (db.query(Course)
+                 .filter(Course.is_active.is_(True), Course.status == "published")
+                 .order_by(Course.created_at.desc(), Course.id.desc())
+                 .limit(6).all())
+    return templates.TemplateResponse(request, "edu_home.html", {
+        "current_user": current_user(request),
+        "published_courses": published,
+    })
+
+
+@app.get("/learn/courses", response_class=HTMLResponse)
+def edu_published_course_catalog(request: Request, db: Annotated[Session, Depends(get_db)]):
+    """Public catalog shows ONLY courses intentionally marked published."""
+    published = (db.query(Course)
+                 .filter(Course.is_active.is_(True), Course.status == "published")
+                 .order_by(Course.created_at.desc(), Course.id.desc())
+                 .limit(100).all())
+    return templates.TemplateResponse(request, "edu_courses.html", {
+        "current_user": current_user(request), "courses": published,
+    })
+
+
+@app.get("/learn/login", response_class=HTMLResponse)
+def edu_verified_student_login(request: Request):
+    """No misleading 'TaxisNet mock' student login until a verified issuer exists."""
+    return templates.TemplateResponse(request, "edu_student_login.html", {
+        "current_user": current_user(request),
+    })
+
+
+# Legacy pilot: keep all QR / presence operations and existing URLs intact,
+# but do not make them the public learning-platform homepage.
+@app.get("/presence", response_class=HTMLResponse)
 def dashboard(request: Request, db: Annotated[Session, Depends(get_db)]):
     nodes = db.query(Node).options(joinedload(Node.classrooms), joinedload(Node.students)).order_by(Node.id.asc()).all()
     pending_makeups = db.query(Makeup).filter(Makeup.status == "pending").count()
