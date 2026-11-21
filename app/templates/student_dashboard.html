@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block breadcrumbs %}
+  <span>›</span><span>Student Dashboard / Τα μαθήματά μου</span>
+{% endblock %}
+{% block content %}
+<style>
+  .edu-student-head{background:linear-gradient(125deg,#102b46,#164c5b);color:#fff;padding:1.5rem 1.7rem;border-radius:16px;margin:0 0 1.3rem}
+  .edu-student-head h1{color:#fff;margin:.25rem 0 .5rem;font-size:clamp(1.5rem,3vw,2rem)}
+  .edu-student-head p{color:#def4f2;margin:.3rem 0;line-height:1.6}
+  .edu-student-kicker{text-transform:uppercase;letter-spacing:.1em;color:#a4efe0;font-size:.75rem;font-weight:700}
+  .edu-student-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem;margin:1rem 0 1.5rem}
+  .edu-student-card{border:1px solid #cad9e4;background:#fff;border-radius:12px;padding:1.1rem;box-shadow:0 4px 15px #1030470d}
+  .edu-student-card h3{margin:.2rem 0 .65rem;color:#183850;font-size:1.08rem}
+  .edu-student-card p{margin:.35rem 0;color:#42566a;line-height:1.5}
+  .edu-student-pill{display:inline-block;background:#e8f3f8;color:#20536e;font-size:.8rem;border-radius:999px;padding:.28rem .65rem;font-weight:700}
+  .edu-student-tag{font-size:.8rem;font-weight:700;color:#176653}
+  .edu-student-note{border-left:4px solid #27967c;background:#eaf7f2;border-radius:6px;padding:1rem 1.2rem;margin-top:1rem;color:#174a3c;line-height:1.6}
+  .edu-student-muted{color:#67798a}
+  .edu-student-section{margin:1.4rem 0 .7rem;font-size:1.2rem;color:#17384c}
+  @media(max-width:560px){.edu-student-head{padding:1.2rem}.edu-student-grid{grid-template-columns:1fr}}
+</style>
+<section class="edu-student-head" aria-labelledby="edu-student-title">
+  <div class="edu-student-kicker">THRONOS EDU · LEARN-2-EARN</div>
+  <h1 id="edu-student-title">Πίνακας Μαθητή / Student Dashboard</h1>
+  {% if student %}
+    <p>Καλώς ήρθες, <strong>{{ student.full_name }}</strong>. Εδώ βλέπεις την επαληθευμένη πρόοδο των μαθημάτων σου.</p>
+  {% else %}
+    <p>Δεν βρέθηκε εγγραφή μαθητή συνδεδεμένη με την επαληθευμένη εκπαιδευτική ταυτότητά σου.</p>
+  {% endif %}
+  <p>Δεν χρειάζεσαι THR Wallet για να παρακολουθείς μαθήματα, παρουσίες και βαθμολογίες.</p>
+</section>
+
+{% if student %}
+  <h2 class="edu-student-section">Εγγραφές και παρουσίες</h2>
+  {% if school_enrollments %}
+    <div class="edu-student-grid" id="edu-enrollment-cards">
+      {% for item in school_enrollments %}
+      <article class="edu-student-card">
+        <span class="edu-student-pill">{{ item.status }}</span>
+        <h3>{{ item.title }}</h3>
+        <p><strong>Τμήμα:</strong> {{ item.classroom }}</p>
+        <p><strong>Καταγεγραμμένες παρουσίες:</strong> {{ item.attended }} / {{ item.lessons }} μαθήματα</p>
+        {% if item.l2e_linked %}<p class="edu-student-tag">Συνδεδεμένο με L2E course</p>{% endif %}
+      </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="edu-student-card" data-state="no-enrollments">
+      Δεν υπάρχουν ακόμη εγγραφές για αυτή την εκπαιδευτική ταυτότητα.
+    </div>
+  {% endif %}
+
+  <h2 class="edu-student-section">Πανεπιστημιακά μαθήματα / Academic courses</h2>
+  {% if academic_courses %}
+  <div class="edu-student-grid" id="edu-academic-courses">
+    {% for item in academic_courses %}
+    <article class="edu-student-card">
+      <h3>{{ item.title }}</h3>
+      {% if item.code %}<p class="edu-student-muted">{{ item.code }}</p>{% endif %}
+      {% if item.score is not none %}
+      <p><strong>Βαθμός:</strong> {{ item.score }}
+        {% if item.passed %}<span class="edu-student-tag">Επιτυχία</span>{% endif %}</p>
+      {% else %}<p class="edu-student-muted">Δεν έχει καταχωριστεί βαθμός.</p>{% endif %}
+      <p><strong>Πιστοποιητικό:</strong>
+        {{ "Εκδόθηκε" if item.certificate_issued else "Δεν έχει εκδοθεί" }}</p>
+      {% if item.l2e_linked %}<p class="edu-student-tag">L2E course linked</p>{% endif %}
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="edu-student-muted">Δεν υπάρχουν πανεπιστημιακά μαθήματα συνδεδεμένα με τα τμήματά σου.</p>
+  {% endif %}
+{% else %}
+  <div class="edu-student-card" data-state="no-student-record">
+    Αν είσαι εγγεγραμμένος μαθητής, επικοινώνησε με τη γραμματεία για ασφαλή αντιστοίχιση της ταυτότητάς σου.
+  </div>
+{% endif %}
+
+<div class="edu-student-note" id="edu-walletless-policy">
+  <strong>Learn-2-Earn / Πολιτική ανταμοιβών</strong>
+  <p>Η συμμετοχή και η πρόσβαση στα μαθήματα δεν απαιτούν πορτοφόλι. Η πιθανή αξίωση L2E είναι ξεχωριστή ενέργεια και απαιτεί επιβεβαιωμένη επιλεξιμότητα και επαληθευμένο THR Wallet. Δεν αποδίδεται αυτόματα ανταμοιβή.</p>
+  {% if not l2e_bridge_enabled %}
+    <p><strong>Σύνδεση L2E:</strong> Η αποστολή εκπαιδευτικών γεγονότων στο ThronosChain δεν έχει ενεργοποιηθεί.</p>
+  {% endif %}
+</div>
+{% endblock %}
